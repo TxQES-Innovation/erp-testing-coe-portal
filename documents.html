@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Documents · TREAT COE</title>
+  <link rel="stylesheet" href="assets/style.css">
+
+</head>
+
+<body>
+  <header class="site-header">
+    <a class="logo" href="index.html">
+      <img src="assets/treat.png" alt="TREAT logo">
+      <span class="lt"><i>Tx’s Repository For Enterprise Applications Testing</i></span>
+    </a>
+    <button class="nav-toggle" aria-label="Toggle navigation menu">&#9776;</button>
+    <nav class="site-nav">
+      <a class="nav-flat" href="index.html">Home</a>
+      <div class="nav-item">
+        <a class="" href="about.html">About <span class="caret">▾</span></a>
+        <div class="nav-dropdown">
+          <a href="about.html">About TREAT</a>
+        </div>
+      </div>
+      <div class="nav-item">
+        <a class="" href="sitemap.html">Pillars <span class="caret">▾</span></a>
+        <div class="nav-dropdown">
+          <a href="01-standards.html">01 · Standards & Best Practices</a>
+          <a href="02-tools.html">02 · Tools & Technology</a>
+          <a href="03-monitoring.html">03 · Monitoring & Continuous Improvement</a>
+          <a href="04-capability.html">04 · Capability Building & Enablement</a>
+          <a href="05-innovation.html">05 · Innovation</a>
+        </div>
+      </div>
+      <div class="nav-item">
+        <a class="active" href="documents.html">Documents <span class="caret">▾</span></a>
+        <div class="nav-dropdown">
+          <a href="documents.html">All Documents</a>
+          <a href="register-document.html">Register a Document</a>
+        </div>
+      </div>
+      <div class="nav-item">
+        <a class="" href="dashboard.html">Dashboard <span class="caret">▾</span></a>
+        <div class="nav-dropdown">
+          <a href="dashboard.html">Readiness Dashboard</a>
+          <a href="sitemap.html">Full Sitemap</a>
+        </div>
+      </div>
+      <div class="role-switcher">
+        <div id="authBox"></div>
+      </div>
+    </nav>
+  </header>
+  <section class="hero hero-sm">
+    <span class="eyebrow">Repository</span>
+    <h1>Documents</h1>
+    <p class="tagline">Search and download documents already in the catalog. Every file lives in SharePoint/Teams — this
+      page just helps you find it.</p>
+  </section>
+  <main class="page-content">
+    <div class="wrap">
+
+      <!-- <div class="role-banner viewer-only">
+        <span>You're browsing as a <b>Viewer</b> (read-only). Anyone can <a href="register-document.html"
+            style="color:var(--ink);font-weight:700">register a document</a> — <b>Log In</b> in the top-right with your
+          Microsoft account to also edit tags or update story status.</span>
+      </div> -->
+      <!-- <div class="role-banner contributor-only">
+        <span>You're signed in as a <b>Contributor</b>. You can edit tags and update story status, in addition to
+          everything Viewers can do. This is granted simply by signing in for now — it isn't yet tied to your real
+          SharePoint permissions.</span>
+      </div> -->
+
+      <div class="section-title">All documents</div>
+      <div class="doc-toolbar">
+        <input type="text" id="docSearch" placeholder="Search documents by name, tag, owner…">
+        <select id="docPillarFilter">
+          <option value="All">All pillars</option>
+          <option value="01">01 · Standards</option>
+          <option value="02">02 · Tools</option>
+          <option value="03">03 · Monitoring</option>
+          <option value="04">04 · Capability</option>
+          <option value="05">05 · Innovation</option>
+        </select>
+      </div>
+      <div class="card" id="docCatalog">
+        <div class="ql-empty">Loading…</div>
+      </div>
+
+      <div class="register-cta">
+        <div>
+          <h4>Have a document to contribute?</h4>
+          <p>Anyone — Viewer or Contributor — can submit a document for the repository. Fill out a short form and it
+            becomes a ready-to-send email with all the details attached.</p>
+        </div>
+        <a class="signin-btn" style="background:var(--teal);color:#fff" href="register-document.html">Register a
+          Document →</a>
+      </div>
+
+    </div>
+  </main>
+  <footer class="site-footer">TREAT Center of Excellence — Internal Knowledge Repository
+    &middot;
+    Documents hosted in <b>SharePoint / Teams.</b></footer>
+  <div id="about-overlay" onclick="toggleAbout()"></div>
+  <div id="about-modal">
+    <div id="about-header">About TREAT<span id="about-close" onclick="toggleAbout()">&times;</span></div>
+    <div id="about-body">
+      <p><strong>TREAT</strong> is <strong>Tx's Repository For Enterprise Applications Testing</strong>, the Center of
+        Excellence behind every
+        ERP/CRM testing engagement. See the full <a href="about.html" style="color:var(--teal)">About page</a> for
+        details.</p>
+    </div>
+  </div>
+
+  <!-- ============================= -->
+  <!-- AI Knowledge Assistant -->
+  <!-- ============================= -->
+  <div id="chatbot-button" onclick="toggleChatbot()"><svg viewBox="0 0 24 24" fill="none" stroke="white"
+      stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="4" y="8" width="16" height="12" rx="3" />
+      <circle cx="9" cy="14" r="1.1" fill="white" stroke="none" />
+      <circle cx="15" cy="14" r="1.1" fill="white" stroke="none" />
+      <path d="M9 17.3h6" />
+      <path d="M12 8V5" />
+      <circle cx="12" cy="3.4" r="1.2" fill="white" stroke="none" />
+      <path d="M2 12h2M20 12h2" />
+    </svg></div>
+  <div id="chatbot-window">
+    <div id="chat-header">
+      <span>SCOUT</span>
+      <span class="close" onclick="toggleChatbot()">&times;</span>
+    </div>
+    <div id="chat-body">
+      <div class="bot-message">
+        <strong> Welcome!</strong><br><br>
+        I can search both COE deliverables and linked documents.
+        Ask me things like:<br><br>
+        • Show me Deliverable 3.6<br>
+        • Search related to Automation Tools<br>
+        • Find documents using keywords<br>
+        • Find documents by tags<br>
+        • Locate the text inside documents
+      </div>
+    </div>
+    <div id="chat-footer">
+      <input id="chat-input" type="text" placeholder="Ask about the COE repository…"
+        onkeypress="if(event.key==='Enter'){sendMessage();}">
+      <button onclick="sendMessage()">Send</button>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3/lib/msal-browser.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3/build/pdf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mammoth@1/mammoth.browser.min.js"></script>
+  <script src="js/site.js?v=20260803115326"></script>
+  <script src="js/auth.js?v=20260803115326"></script>
+  <script src="js/graph.js?v=20260803115326"></script>
+</body>
+
+</html>

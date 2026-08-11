@@ -1,0 +1,2298 @@
+/* ==========================================================================
+   EAT COE — application logic
+   No signup, no backend: everything below runs entirely client-side.
+   Real document FILES always live in SharePoint/Teams — this site only
+   stores a catalog entry (name, tags, owner, link). "Register a document"
+   never uploads a file anywhere; it just links out to SharePoint.
+   Anything a visitor adds/edits (registrations, tags, status, role) is
+   saved in that visitor's own browser only (localStorage) — it is not
+   shared with other people opening the same link. See README.md for how
+   to make the catalog shared across everyone using a free backend.
+   ========================================================================== */
+
+const SHAREPOINT_FOLDER_URL = "https://txplin.sharepoint.com/sites/EnterpriseApplicationTesting-EAT/Shared Documents";
+
+/**
+ * Lightweight, non-blocking notification — replaces every native alert()
+ * on the site. Unlike alert(), this never pauses/blocks the page, never
+ * needs to be manually dismissed to continue, and disappears on its own.
+ * type: "info" | "success" | "error"
+ * durationMs: 0 means it stays until manually closed (used for things
+ * someone genuinely needs to read and act on, like a real error).
+ */
+function showToast(message, type, durationMs) {
+  type = type || "info";
+  durationMs = durationMs === undefined ? 6000 : durationMs;
+
+  let container = document.getElementById("toastContainer");
+  if (!container) {
+    container = document.createElement("div");
+    container.id = "toastContainer";
+    document.body.appendChild(container);
+  }
+
+  const toast = document.createElement("div");
+  toast.className = "toast toast-" + type;
+  const msgEl = document.createElement("span");
+  msgEl.className = "toast-msg";
+  msgEl.textContent = message; // textContent, not innerHTML — never renders as HTML
+  const closeBtn = document.createElement("button");
+  closeBtn.className = "toast-close";
+  closeBtn.setAttribute("aria-label", "Dismiss");
+  closeBtn.textContent = "\u00d7";
+  toast.appendChild(msgEl);
+  toast.appendChild(closeBtn);
+  container.appendChild(toast);
+
+  const remove = () => {
+    toast.classList.remove("toast-show");
+    setTimeout(() => toast.remove(), 200);
+  };
+  closeBtn.addEventListener("click", remove);
+  if (durationMs > 0) setTimeout(remove, durationMs);
+  requestAnimationFrame(() => toast.classList.add("toast-show"));
+  return remove;
+}
+
+const STORIES = [
+  {
+    "code": "1.1",
+    "title": "Define Test Strategy, Compliance & SOPs",
+    "pillarCode": "01",
+    "pillar": "Standards & Best Practices",
+    "status": "Done",
+    "owner": "QA Lead / Manager",
+    "description": "Unified test strategy & SOPs, plus the RAT/RTM template set.",
+    "tags": [
+      "strategy",
+      "sop",
+      "compliance",
+      "rtm",
+      "test plan"
+    ],
+    "url": "01-standards.html#1.1",
+    "doc": "docs/01-standards/1.1 Define Test strategy, compliance, and SOPs/Unified Test Strategy & SOPs for ERP.docx",
+    "type": "story"
+  },
+  {
+    "code": "1.2",
+    "title": "Reusable Automation Framework with CI/CD",
+    "pillarCode": "01",
+    "pillar": "Standards & Best Practices",
+    "status": "Done",
+    "owner": "Automation Architect",
+    "description": "Automation framework architecture, reusable function library, data-driven test design guide.",
+    "tags": [
+      "automation",
+      "framework",
+      "ci/cd",
+      "architecture"
+    ],
+    "url": "01-standards.html#1.2",
+    "type": "story"
+  },
+  {
+    "code": "1.3",
+    "title": "Quality Metrics & KPIs",
+    "pillarCode": "01",
+    "pillar": "Standards & Best Practices",
+    "status": "Done",
+    "owner": "QA Manager",
+    "description": "KPI catalog (e.g. DRE, cycle time) and dashboard specification.",
+    "tags": [
+      "kpi",
+      "metrics",
+      "dashboard",
+      "dre"
+    ],
+    "url": "01-standards.html#1.3",
+    "doc": "docs/01-standards/1.3 Quality metrics & KPIs/ERP Quality Metrics & KPIs.docx",
+    "type": "story"
+  },
+  {
+    "code": "1.4",
+    "title": "Monitoring & Governance Framework",
+    "pillarCode": "01",
+    "pillar": "Standards & Best Practices",
+    "status": "Done",
+    "owner": "COE Lead",
+    "description": "Governance playbook, review calendar, escalation matrix, governance audit checklist.",
+    "tags": [
+      "governance",
+      "monitoring",
+      "escalation",
+      "playbook"
+    ],
+    "url": "01-standards.html#1.4",
+    "doc": "docs/01-standards/1.4 Monitoring & Governance framework/Monitoring & Governance Framework for ERP.docx",
+    "type": "story"
+  },
+  {
+    "code": "1.5",
+    "title": "Versioning & Change Control Process",
+    "pillarCode": "01",
+    "pillar": "Standards & Best Practices",
+    "status": "Done",
+    "owner": "COE Lead",
+    "description": "Versioning approach, change log template, adoption training.",
+    "tags": [
+      "versioning",
+      "change control",
+      "change log"
+    ],
+    "url": "01-standards.html#1.5",
+    "doc": "docs/01-standards/1.5 Versioning and Change Control Process/Versioning and Change Control Process for ERP.docx",
+    "type": "story"
+  },
+  {
+    "code": "1.6",
+    "title": "Test Data Management Standards",
+    "pillarCode": "01",
+    "pillar": "Standards & Best Practices",
+    "status": "In Progress",
+    "owner": "ETL Lead",
+    "description": "TDM strategy per ERP module, TDM SOP, anonymization/masking guidelines.",
+    "tags": [
+      "test data",
+      "tdm",
+      "masking",
+      "anonymization"
+    ],
+    "url": "01-standards.html#1.6",
+    "type": "story"
+  },
+  {
+    "code": "2.1",
+    "title": "Tool Evaluation Framework",
+    "pillarCode": "02",
+    "pillar": "Tools & Technology",
+    "status": "Done",
+    "owner": "Automation Architect",
+    "description": "Scoring criteria (cost, support, flexibility, ROI) and evaluation template.",
+    "tags": [
+      "tool evaluation",
+      "scoring",
+      "roi"
+    ],
+    "url": "02-tools.html#2.1",
+    "type": "story"
+  },
+  {
+    "code": "2.2",
+    "title": "Tool Capability & Best Practices",
+    "pillarCode": "02",
+    "pillar": "Tools & Technology",
+    "status": "In Progress",
+    "owner": "QA Lead",
+    "description": "Tool documentation library with worked use-case examples.",
+    "tags": [
+      "tools",
+      "documentation",
+      "best practices"
+    ],
+    "url": "02-tools.html#2.2",
+    "type": "story"
+  },
+  {
+    "code": "2.3",
+    "title": "Checklists & User Guides",
+    "pillarCode": "02",
+    "pillar": "Tools & Technology",
+    "status": "Done",
+    "owner": "QA Lead",
+    "description": "Role-based guides with screenshots and tips.",
+    "tags": [
+      "checklist",
+      "user guide",
+      "how to"
+    ],
+    "url": "02-tools.html#2.3",
+    "type": "story"
+  },
+  {
+    "code": "2.4",
+    "title": "Integration with CI/CD Tools",
+    "pillarCode": "02",
+    "pillar": "Tools & Technology",
+    "status": "Backlog",
+    "owner": "Automation Architect",
+    "description": "CI/CD integration standards, reusable pipeline scripts, use-case library (Jenkins, Azure DevOps, GitLab).",
+    "tags": [
+      "ci/cd",
+      "jenkins",
+      "azure devops",
+      "gitlab",
+      "pipeline"
+    ],
+    "url": "02-tools.html#2.4",
+    "type": "story"
+  },
+  {
+    "code": "3.1",
+    "title": "Market Study & Trend Analysis",
+    "pillarCode": "03",
+    "pillar": "Monitoring & Continuous Improvement",
+    "status": "In Progress",
+    "owner": "COE Member",
+    "description": "Quarterly trend reports with recommendations to the COE.",
+    "tags": [
+      "trends",
+      "market study",
+      "ai/ml"
+    ],
+    "url": "03-monitoring.html#3.1",
+    "type": "story"
+  },
+  {
+    "code": "3.2",
+    "title": "Lessons Learnt",
+    "pillarCode": "03",
+    "pillar": "Monitoring & Continuous Improvement",
+    "status": "Backlog",
+    "owner": "QA Lead",
+    "description": "Lessons-learned template and post-release retrospective log.",
+    "tags": [
+      "lessons learned",
+      "retrospective"
+    ],
+    "url": "03-monitoring.html#3.2",
+    "type": "story"
+  },
+  {
+    "code": "3.3",
+    "title": "Review Process",
+    "pillarCode": "03",
+    "pillar": "Monitoring & Continuous Improvement",
+    "status": "Backlog",
+    "owner": "QA Lead",
+    "description": "Review checklist and mandatory pre-UAT review gate.",
+    "tags": [
+      "review",
+      "checklist",
+      "uat"
+    ],
+    "url": "03-monitoring.html#3.3",
+    "type": "story"
+  },
+  {
+    "code": "3.4",
+    "title": "Monitoring & Governance Practices",
+    "pillarCode": "03",
+    "pillar": "Monitoring & Continuous Improvement",
+    "status": "To Do",
+    "owner": "QA Manager",
+    "description": "Monitoring SOPs, DSR/WSR/dashboard templates, alerting configuration.",
+    "tags": [
+      "monitoring",
+      "dsr",
+      "wsr",
+      "alerting"
+    ],
+    "url": "03-monitoring.html#3.4",
+    "type": "story"
+  },
+  {
+    "code": "3.5",
+    "title": "Continuous Improvement",
+    "pillarCode": "03",
+    "pillar": "Monitoring & Continuous Improvement",
+    "status": "Done",
+    "owner": "COE Lead",
+    "description": "Continuous improvement framework and tracked action log.",
+    "tags": [
+      "continuous improvement",
+      "action log"
+    ],
+    "url": "03-monitoring.html#3.5",
+    "doc": "docs/03-monitoring/3.5 Continuous Improvement/Continuous Improvement Framework for ERP.docx",
+    "type": "story"
+  },
+  {
+    "code": "3.6",
+    "title": "Defect Trend Analysis",
+    "pillarCode": "03",
+    "pillar": "Monitoring & Continuous Improvement",
+    "status": "Done",
+    "owner": "QA Lead",
+    "description": "Defect trend methodology, dashboard templates, RCA format.",
+    "tags": [
+      "defects",
+      "trend analysis",
+      "rca",
+      "dashboard"
+    ],
+    "url": "03-monitoring.html#3.6",
+    "doc": "docs/03-monitoring/3.6 Defect Trend Analysis/Defect Trend Analysis and Reporting Framework for ERP Testing.docx",
+    "type": "story"
+  },
+  {
+    "code": "4.1",
+    "title": "Success & Failure Reports (Case Studies)",
+    "pillarCode": "04",
+    "pillar": "Capability Building & Enablement",
+    "status": "Backlog",
+    "owner": "COE Member",
+    "description": "Quarterly case study, reviewed and published internally.",
+    "tags": [
+      "case study",
+      "success",
+      "failure"
+    ],
+    "url": "04-capability.html#4.1",
+    "type": "story"
+  },
+  {
+    "code": "4.2",
+    "title": "Capability Deck",
+    "pillarCode": "04",
+    "pillar": "Capability Building & Enablement",
+    "status": "To Do",
+    "owner": "QA Lead",
+    "description": "Capability deck, refreshed quarterly.",
+    "tags": [
+      "capability deck",
+      "onboarding"
+    ],
+    "url": "04-capability.html#4.2",
+    "type": "story"
+  },
+  {
+    "code": "4.3",
+    "title": "Skill Development",
+    "pillarCode": "04",
+    "pillar": "Capability Building & Enablement",
+    "status": "To Do",
+    "owner": "COE Member",
+    "description": "Skill matrix, learning paths, trainer roster, training calendar.",
+    "tags": [
+      "skills",
+      "training",
+      "learning path"
+    ],
+    "url": "04-capability.html#4.3",
+    "type": "story"
+  },
+  {
+    "code": "4.4",
+    "title": "Knowledge Management Framework",
+    "pillarCode": "04",
+    "pillar": "Capability Building & Enablement",
+    "status": "Done",
+    "owner": "COE Lead",
+    "description": "Central repository with indexing and folder structure — the foundation this website implements.",
+    "tags": [
+      "knowledge management",
+      "repository",
+      "indexing"
+    ],
+    "url": "04-capability.html#4.4",
+    "doc": "docs/04-capability/4.4 Knowledge Management Framework/Knowledge Management Framework for ERP Testing.docx",
+    "type": "story"
+  },
+  {
+    "code": "4.5",
+    "title": "Business & Domain Knowledge",
+    "pillarCode": "04",
+    "pillar": "Capability Building & Enablement",
+    "status": "Done",
+    "owner": "COE Member",
+    "description": "Module synopsis pages indexed with links to related documents, SME walkthroughs.",
+    "tags": [
+      "business knowledge",
+      "domain knowledge",
+      "sme"
+    ],
+    "url": "04-capability.html#4.5",
+    "doc": "docs/04-capability/4.5 Business & Domain knowledge/Business & Domain Knowledge Framework for ERP.docx",
+    "type": "story"
+  },
+  {
+    "code": "4.6",
+    "title": "Business / Domain SMEs",
+    "pillarCode": "04",
+    "pillar": "Capability Building & Enablement",
+    "status": "In Progress",
+    "owner": "QA Director",
+    "description": "SME directory by module with a monthly sync cadence.",
+    "tags": [
+      "sme",
+      "directory",
+      "domain experts"
+    ],
+    "url": "04-capability.html#4.6",
+    "type": "story"
+  },
+  {
+    "code": "4.7",
+    "title": "Career Growth & Mentoring",
+    "pillarCode": "04",
+    "pillar": "Capability Building & Enablement",
+    "status": "To Do",
+    "owner": "COE Lead",
+    "description": "Training curriculum with notes/presentations, attendance and feedback tracking.",
+    "tags": [
+      "mentoring",
+      "career growth",
+      "curriculum"
+    ],
+    "url": "04-capability.html#4.7",
+    "type": "story"
+  },
+  {
+    "code": "4.8",
+    "title": "ERP-Specific Scenarios & Use Cases",
+    "pillarCode": "04",
+    "pillar": "Capability Building & Enablement",
+    "status": "Done",
+    "owner": "COE Member",
+    "description": "Business/functionality-specific standard scenario library, reviewed quarterly.",
+    "tags": [
+      "scenarios",
+      "use cases",
+      "erp"
+    ],
+    "url": "04-capability.html#4.8",
+    "type": "story"
+  },
+  {
+    "code": "5.1",
+    "title": "Checklists & Templates",
+    "pillarCode": "05",
+    "pillar": "Innovation",
+    "status": "In Progress",
+    "owner": "QA Lead",
+    "description": "Published starter kits with documented usage.",
+    "tags": [
+      "ai",
+      "checklist",
+      "template",
+      "starter kit"
+    ],
+    "url": "05-innovation.html#5.1",
+    "type": "story"
+  },
+  {
+    "code": "5.2",
+    "title": "AI-Assisted Testing Workflows",
+    "pillarCode": "05",
+    "pillar": "Innovation",
+    "status": "Backlog",
+    "owner": "QA Lead",
+    "description": "Workflow guidelines with a risk log, rollback plan and review checkpoints.",
+    "tags": [
+      "ai",
+      "workflow",
+      "risk log",
+      "rollback"
+    ],
+    "url": "05-innovation.html#5.2",
+    "type": "story"
+  },
+  {
+    "code": "5.3",
+    "title": "AI Test Optimization",
+    "pillarCode": "05",
+    "pillar": "Innovation",
+    "status": "Backlog",
+    "owner": "Automation Engineer",
+    "description": "Proof of concept with pilot results shared.",
+    "tags": [
+      "ai",
+      "optimization",
+      "poc",
+      "pilot"
+    ],
+    "url": "05-innovation.html#5.3",
+    "type": "story"
+  },
+  {
+    "code": "5.4",
+    "title": "Develop Accelerators",
+    "pillarCode": "05",
+    "pillar": "Innovation",
+    "status": "Backlog",
+    "owner": "QA Lead",
+    "description": "Accelerator library with documented usage.",
+    "tags": [
+      "accelerator",
+      "data validator",
+      "script generator"
+    ],
+    "url": "05-innovation.html#5.4",
+    "type": "story"
+  },
+  {
+    "code": "5.5",
+    "title": "Implement Relevant AI Use Cases",
+    "pillarCode": "05",
+    "pillar": "Innovation",
+    "status": "Backlog",
+    "owner": "COE Lead",
+    "description": "At least one production AI use case with ROI tracked post-implementation.",
+    "tags": [
+      "ai",
+      "use case",
+      "roi",
+      "production"
+    ],
+    "url": "05-innovation.html#5.5",
+    "type": "story"
+  }
+];
+
+const SEED_DOCS = [
+  {
+    "id": "seed-1.1",
+    "name": "Unified Test Strategy & SOPs for ERP.docx",
+    "storyCode": "1.1",
+    "pillarCode": "01",
+    "pillar": "Standards & Best Practices",
+    "uploadedBy": "QA Manager",
+    "uploadDate": "2026-02-10",
+    "lastModifiedBy": "QA Manager",
+    "lastModifiedDate": "2026-03-18",
+    "tags": [
+      "strategy",
+      "sop",
+      "compliance",
+      "rtm"
+    ],
+    "url": SHAREPOINT_FOLDER_URL,
+    "downloads": 58,
+    "location": "SharePoint (shared folder)",
+    "featured": true,
+    "type": "document",
+    "sourceType": "seed"
+  },
+  {
+    "id": "seed-1.3",
+    "name": "ERP Quality Metrics & KPIs.docx",
+    "storyCode": "1.3",
+    "pillarCode": "01",
+    "pillar": "Standards & Best Practices",
+    "uploadedBy": "QA Manager",
+    "uploadDate": "2026-01-22",
+    "lastModifiedBy": "QA Manager",
+    "lastModifiedDate": "2026-01-22",
+    "tags": [
+      "kpi",
+      "metrics",
+      "dashboard"
+    ],
+    "url": SHAREPOINT_FOLDER_URL,
+    "downloads": 41,
+    "location": "SharePoint (shared folder)",
+    "featured": false,
+    "type": "document",
+    "sourceType": "seed"
+  },
+  {
+    "id": "seed-1.4",
+    "name": "Monitoring & Governance Framework for ERP.docx",
+    "storyCode": "1.4",
+    "pillarCode": "01",
+    "pillar": "Standards & Best Practices",
+    "uploadedBy": "COE Lead",
+    "uploadDate": "2025-12-05",
+    "lastModifiedBy": "COE Lead",
+    "lastModifiedDate": "2026-04-02",
+    "tags": [
+      "governance",
+      "monitoring",
+      "escalation"
+    ],
+    "url": SHAREPOINT_FOLDER_URL,
+    "downloads": 33,
+    "location": "SharePoint (shared folder)",
+    "featured": false,
+    "type": "document",
+    "sourceType": "seed"
+  },
+  {
+    "id": "seed-1.5",
+    "name": "Versioning and Change Control Process for ERP.docx",
+    "storyCode": "1.5",
+    "pillarCode": "01",
+    "pillar": "Standards & Best Practices",
+    "uploadedBy": "COE Lead",
+    "uploadDate": "2025-11-14",
+    "lastModifiedBy": "COE Lead",
+    "lastModifiedDate": "2025-11-14",
+    "tags": [
+      "versioning",
+      "change control"
+    ],
+    "url": SHAREPOINT_FOLDER_URL,
+    "downloads": 19,
+    "location": "SharePoint (shared folder)",
+    "featured": false,
+    "type": "document",
+    "sourceType": "seed"
+  },
+  {
+    "id": "seed-3.5",
+    "name": "Continuous Improvement Framework for ERP.docx",
+    "storyCode": "3.5",
+    "pillarCode": "03",
+    "pillar": "Monitoring & Continuous Improvement",
+    "uploadedBy": "COE Lead",
+    "uploadDate": "2026-03-01",
+    "lastModifiedBy": "COE Lead",
+    "lastModifiedDate": "2026-05-11",
+    "tags": [
+      "continuous improvement",
+      "action log"
+    ],
+    "url": SHAREPOINT_FOLDER_URL,
+    "downloads": 47,
+    "location": "SharePoint (shared folder)",
+    "featured": false,
+    "type": "document",
+    "sourceType": "seed"
+  },
+  {
+    "id": "seed-3.6",
+    "name": "Defect Trend Analysis and Reporting Framework for ERP Testing.docx",
+    "storyCode": "3.6",
+    "pillarCode": "03",
+    "pillar": "Monitoring & Continuous Improvement",
+    "uploadedBy": "QA Lead",
+    "uploadDate": "2026-04-19",
+    "lastModifiedBy": "QA Lead",
+    "lastModifiedDate": "2026-06-30",
+    "tags": [
+      "defects",
+      "trend analysis",
+      "rca"
+    ],
+    "url": SHAREPOINT_FOLDER_URL,
+    "downloads": 62,
+    "location": "SharePoint (shared folder)",
+    "featured": true,
+    "type": "document",
+    "sourceType": "seed"
+  },
+  {
+    "id": "seed-4.4",
+    "name": "Knowledge Management Framework for ERP Testing.docx",
+    "storyCode": "4.4",
+    "pillarCode": "04",
+    "pillar": "Capability Building & Enablement",
+    "uploadedBy": "COE Lead",
+    "uploadDate": "2025-10-08",
+    "lastModifiedBy": "COE Lead",
+    "lastModifiedDate": "2026-02-14",
+    "tags": [
+      "knowledge management",
+      "repository"
+    ],
+    "url": SHAREPOINT_FOLDER_URL,
+    "downloads": 29,
+    "location": "SharePoint (shared folder)",
+    "featured": true,
+    "type": "document",
+    "sourceType": "seed"
+  },
+  {
+    "id": "seed-4.5",
+    "name": "Business & Domain Knowledge Framework for ERP.docx",
+    "storyCode": "4.5",
+    "pillarCode": "04",
+    "pillar": "Capability Building & Enablement",
+    "uploadedBy": "COE Member",
+    "uploadDate": "2026-05-27",
+    "lastModifiedBy": "COE Member",
+    "lastModifiedDate": "2026-07-05",
+    "tags": [
+      "business knowledge",
+      "domain knowledge",
+      "sme"
+    ],
+    "url": SHAREPOINT_FOLDER_URL,
+    "downloads": 22,
+    "location": "SharePoint (shared folder)",
+    "featured": false,
+    "type": "document",
+    "sourceType": "seed"
+  }
+];
+
+const SEED_ACTIVITY = [
+  {
+    "type": "download",
+    "actor": "COE Lead",
+    "target": "Business & Domain Knowledge Framework for ERP.docx",
+    "timestamp": "2026-07-16"
+  },
+  {
+    "type": "status",
+    "actor": "QA Manager",
+    "target": "a story status",
+    "timestamp": "2026-07-17"
+  },
+  {
+    "type": "upload",
+    "actor": "Automation Architect",
+    "target": "Versioning and Change Control Process for ERP.docx",
+    "timestamp": "2026-07-18"
+  },
+  {
+    "type": "download",
+    "actor": "Automation Architect",
+    "target": "Monitoring & Governance Framework for ERP.docx",
+    "timestamp": "2026-07-18"
+  },
+  {
+    "type": "upload",
+    "actor": "Automation Architect",
+    "target": "Versioning and Change Control Process for ERP.docx",
+    "timestamp": "2026-07-18"
+  },
+  {
+    "type": "tag",
+    "actor": "QA Manager",
+    "target": "ERP Quality Metrics & KPIs.docx",
+    "timestamp": "2026-07-18"
+  },
+  {
+    "type": "status",
+    "actor": "COE Member",
+    "target": "a story status",
+    "timestamp": "2026-07-19"
+  },
+  {
+    "type": "status",
+    "actor": "COE Member",
+    "target": "a story status",
+    "timestamp": "2026-07-19"
+  },
+  {
+    "type": "upload",
+    "actor": "QA Manager",
+    "target": "Defect Trend Analysis and Reporting Framework for ERP Testing.docx",
+    "timestamp": "2026-07-19"
+  },
+  {
+    "type": "download",
+    "actor": "COE Member",
+    "target": "Unified Test Strategy & SOPs for ERP.docx",
+    "timestamp": "2026-07-20"
+  },
+  {
+    "type": "tag",
+    "actor": "COE Lead",
+    "target": "ERP Quality Metrics & KPIs.docx",
+    "timestamp": "2026-07-20"
+  },
+  {
+    "type": "upload",
+    "actor": "Automation Architect",
+    "target": "ERP Quality Metrics & KPIs.docx",
+    "timestamp": "2026-07-20"
+  },
+  {
+    "type": "download",
+    "actor": "COE Lead",
+    "target": "Versioning and Change Control Process for ERP.docx",
+    "timestamp": "2026-07-20"
+  },
+  {
+    "type": "tag",
+    "actor": "QA Lead",
+    "target": "ERP Quality Metrics & KPIs.docx",
+    "timestamp": "2026-07-20"
+  },
+  {
+    "type": "download",
+    "actor": "Automation Architect",
+    "target": "Business & Domain Knowledge Framework for ERP.docx",
+    "timestamp": "2026-07-20"
+  },
+  {
+    "type": "tag",
+    "actor": "QA Manager",
+    "target": "Unified Test Strategy & SOPs for ERP.docx",
+    "timestamp": "2026-07-20"
+  },
+  {
+    "type": "status",
+    "actor": "QA Manager",
+    "target": "a story status",
+    "timestamp": "2026-07-22"
+  },
+  {
+    "type": "upload",
+    "actor": "COE Member",
+    "target": "Knowledge Management Framework for ERP Testing.docx",
+    "timestamp": "2026-07-22"
+  },
+  {
+    "type": "download",
+    "actor": "QA Manager",
+    "target": "Knowledge Management Framework for ERP Testing.docx",
+    "timestamp": "2026-07-22"
+  },
+  {
+    "type": "status",
+    "actor": "QA Manager",
+    "target": "a story status",
+    "timestamp": "2026-07-22"
+  },
+  {
+    "type": "download",
+    "actor": "QA Manager",
+    "target": "Monitoring & Governance Framework for ERP.docx",
+    "timestamp": "2026-07-22"
+  },
+  {
+    "type": "status",
+    "actor": "Automation Architect",
+    "target": "a story status",
+    "timestamp": "2026-07-22"
+  },
+  {
+    "type": "status",
+    "actor": "QA Lead",
+    "target": "a story status",
+    "timestamp": "2026-07-22"
+  },
+  {
+    "type": "status",
+    "actor": "COE Member",
+    "target": "a story status",
+    "timestamp": "2026-07-22"
+  }
+];
+
+/* ---------------- localStorage helpers ---------------- */
+const LS = {
+  role: "eatcoe_role",
+  user: "eatcoe_username",
+  userDocs: "eatcoe_user_docs",
+  seedOverrides: "eatcoe_seed_overrides",
+  statusOverrides: "eatcoe_status_overrides",
+  activity: "eatcoe_activity",
+  downloads: "eatcoe_downloads"
+};
+
+function lsGet(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw === null ? fallback : JSON.parse(raw);
+  } catch (e) { return fallback; }
+}
+function lsSet(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) { console.error("storage failed", e); }
+}
+
+function getRole() { return lsGet(LS.role, "viewer"); }
+function setRole(r) { lsSet(LS.role, r); applyRoleToBody(); if (typeof syncStatusEditors === "function") syncStatusEditors(); }
+function getUserName() { return lsGet(LS.user, "Guest"); }
+function setUserName(n) { lsSet(LS.user, n || "Guest"); }
+
+function applyRoleToBody() {
+  document.body.classList.toggle("role-viewer", getRole() !== "contributor");
+  document.body.classList.toggle("role-contributor", getRole() === "contributor");
+}
+
+function initRoleSwitcher() {
+  applyRoleToBody();
+}
+
+/* ---------------- activity log ---------------- */
+function ensureSeedActivity() {
+  const existing = localStorage.getItem(LS.activity);
+  if (existing === null) lsSet(LS.activity, SEED_ACTIVITY);
+}
+function getActivity() { return lsGet(LS.activity, SEED_ACTIVITY); }
+function logActivity(type, target) {
+  const log = getActivity();
+  log.push({ type, actor: getUserName(), target, timestamp: new Date().toISOString().slice(0, 10) });
+  lsSet(LS.activity, log.slice(-500));
+}
+
+/* ---------------- documents ---------------- */
+function getUserDocs() { return lsGet(LS.userDocs, []); }
+function saveUserDocs(arr) { lsSet(LS.userDocs, arr); }
+function getSeedOverrides() { return lsGet(LS.seedOverrides, {}); }
+function saveSeedOverrides(obj) { lsSet(LS.seedOverrides, obj); }
+
+// Unified, name-keyed override store: tags (and who/when last touched them)
+// for ANY document, looked up by its name rather than its id. This matters
+// because a document's id changes depending on where it's currently coming
+// from (a "seed" placeholder id before Graph loads, a "graph-..." id once
+// it's found for real) — but its NAME stays the same throughout. Keying by
+// name means: (1) tagging a document works correctly regardless of which
+// source it's currently being shown from, and (2) tags entered while
+// registering a brand new document (before it even exists in SharePoint
+// yet) are remembered and automatically applied the moment a real document
+// with that same name shows up later, with no extra step needed.
+const DOC_NAME_OVERRIDES_KEY = "eatcoe_doc_name_overrides";
+function normalizeDocName(name) { return (name || "").trim().toLowerCase(); }
+function getDocNameOverrides() { return lsGet(DOC_NAME_OVERRIDES_KEY, {}); }
+function saveDocNameOverrides(obj) { lsSet(DOC_NAME_OVERRIDES_KEY, obj); }
+
+// Shared, cross-user tags loaded from SharePoint (see fetchSharedTagsFile
+// in js/graph.js) — this is what makes a tag someone else added actually
+// visible to you. null = not loaded yet; {} once loaded (possibly empty).
+let SHARED_TAGS = null;
+
+async function loadSharedTags() {
+  if (typeof fetchSharedTagsFile !== "function") return;
+  try {
+    SHARED_TAGS = await fetchSharedTagsFile();
+  } catch (e) {
+    console.warn("Could not load shared tags from SharePoint — showing locally-saved tags only for now.", e);
+    SHARED_TAGS = SHARED_TAGS || {};
+  }
+  refreshDocViews();
+}
+
+function getDocNameOverride(name) {
+  const key = normalizeDocName(name);
+  const local = getDocNameOverrides()[key];
+  const shared = SHARED_TAGS ? SHARED_TAGS[key] : null;
+  if (!local && !shared) return null;
+  // Shared tags are the real, team-wide source of truth; local tags act as
+  // an optimistic overlay — e.g. a tag just added that hasn't finished
+  // syncing yet, or one saved while shared write access wasn't available.
+  const tags = Array.from(new Set([...(shared && shared.tags ? shared.tags : []), ...(local && local.tags ? local.tags : [])]));
+  return { tags };
+}
+
+/**
+ * Saves a tag change. Always saves locally first (so the UI updates
+ * immediately regardless of network/permission state), then tries to sync
+ * it to the shared SharePoint file so everyone else can see it too.
+ * Returns { synced: true } if the shared save succeeded, or
+ * { synced: false, error } if it's only saved locally on this device for
+ * now (e.g. shared write access hasn't been granted by an admin yet).
+ */
+async function setDocTagsOverride(name, tags) {
+  const key = normalizeDocName(name);
+  const overrides = getDocNameOverrides();
+  // Deliberately does NOT stamp lastModifiedBy/lastModifiedDate — adding a
+  // tag is a local annotation, not a real change to the document itself,
+  // so it shouldn't look like the file was "modified," and critically,
+  // it must never affect sort order (see getAllDocuments below) — that's
+  // what was causing rows to jump to the top the moment a tag was added.
+  overrides[key] = { ...(overrides[key] || {}), tags };
+  saveDocNameOverrides(overrides);
+
+  if (typeof saveSharedTag !== "function") return { synced: false };
+  try {
+    await saveSharedTag(key, tags);
+    if (SHARED_TAGS) SHARED_TAGS[key] = { tags };
+    return { synced: true };
+  } catch (e) {
+    console.warn("Could not save this tag to the shared SharePoint file — it's saved locally on this device for now. Ask your admin to grant Sites.ReadWrite.All if this keeps happening.", e);
+    return { synced: false, error: e };
+  }
+}
+function getDownloadCounts() { return lsGet(LS.downloads, {}); }
+function bumpDownload(docId) {
+  const counts = getDownloadCounts();
+  counts[docId] = (counts[docId] || 0) + 1;
+  lsSet(LS.downloads, counts);
+}
+
+// Populated asynchronously by js/graph.js once the real SharePoint folder
+// listing has been fetched via Microsoft Graph. Until then (not signed in,
+// Graph not configured, or still loading), getAllDocuments() falls back to
+// the static seed catalog below, so the site always shows something.
+let GRAPH_DOCS = null;
+// "idle" | "loading" | "loaded" | "failed" — lets render functions show an
+// honest "loading" state instead of flashing the wrong seed-catalog content
+// and then silently swapping it out once the real data arrives.
+let GRAPH_LOAD_STATE = "idle";
+// Only actually SHOW the loading UI once this grace period has passed with
+// no result yet — a fast, normal load (the common case) never flashes any
+// loading message at all; content just appears once ready. Only a
+// genuinely slow load (network glitch, high latency) reveals it.
+const GRAPH_LOADING_UI_DELAY_MS = 600;
+let graphLoadingUIDelayTimer = null;
+let showGraphLoadingUI = false;
+
+function setGraphLoadState(state) {
+  GRAPH_LOAD_STATE = state;
+  clearTimeout(graphLoadingUIDelayTimer);
+  if (state === "loading") {
+    showGraphLoadingUI = false;
+    graphLoadingUIDelayTimer = setTimeout(() => {
+      if (GRAPH_LOAD_STATE === "loading") {
+        showGraphLoadingUI = true;
+        refreshDocViews();
+      }
+    }, GRAPH_LOADING_UI_DELAY_MS);
+  } else {
+    showGraphLoadingUI = false;
+  }
+  refreshDocViews();
+}
+
+function isGraphStillLoading() {
+  return typeof SSO_ENABLED !== "undefined" && SSO_ENABLED && GRAPH_LOAD_STATE === "loading" && !GRAPH_DOCS && showGraphLoadingUI;
+}
+
+function graphLoadingHtml(label) {
+  return `<div class="doc-loading"><span class="doc-loading-spinner"></span>${escapeHtml(label || "Fetching your documents from SharePoint…")}</div>`;
+}
+
+function setGraphDocuments(list) {
+  GRAPH_DOCS = list;
+  GRAPH_LOAD_STATE = "loaded";
+  refreshDocViews();
+  if (typeof renderMetrics === "function") renderMetrics();
+}
+
+function getAllDocuments() {
+  const counts = getDownloadCounts();
+  const applyNameOverride = (d) => {
+    const o = getDocNameOverride(d.name);
+    if (!o) return d;
+    // Only tags are merged in — lastModifiedBy/lastModifiedDate stay as
+    // the document's real, stable SharePoint values, so tagging can never
+    // shift where it sorts in the list (see setDocTagsOverride above).
+    return { ...d, tags: o.tags || d.tags };
+  };
+
+  let base;
+  if (GRAPH_DOCS !== null) {
+    // A real Graph load has completed — use it even if it found zero
+    // files, rather than incorrectly falling back to the seed catalog
+    // (an empty array here is a legitimate "nothing here" result, not
+    // "hasn't loaded yet").
+    // Real documents fetched live from SharePoint via Microsoft Graph.
+    base = GRAPH_DOCS.map(d => applyNameOverride({ ...d, downloads: d.downloads + (counts[d.id] || 0) }));
+  } else {
+    base = SEED_DOCS.map(d => applyNameOverride({ ...d, downloads: d.downloads + (counts[d.id] || 0) }));
+  }
+
+  const user = getUserDocs().map(d => applyNameOverride({ ...d, downloads: d.downloads + (counts[d.id] || 0) }));
+  const pending = getPendingAttachment();
+  return [...base, ...user, ...(pending ? [applyNameOverride(pending)] : [])];
+}
+
+function getDocsForStory(code) {
+  return getAllDocuments().filter(d => d.storyCode === code);
+}
+
+/* ---------------- Register a Document (email-based contribution) ----------------
+ * There is no in-browser file upload anymore: real documents live in
+ * SharePoint/Teams, and files are routed there by a human who reads the
+ * submitted email and files the attachment into the folder matching the
+ * chosen pillar/story labels. This section only composes that email —
+ * nothing here writes to the document catalog or to any storage.
+ * TODO: replace with a direct Microsoft Graph upload once SSO has
+ * Sites.Selected write access — at that point this form could upload for
+ * real, but the mailto fallback is still worth keeping for anyone without
+ * SharePoint access.
+ */
+const COE_INTAKE_EMAIL = "Treat@testingxperts.com";
+
+const PILLAR_FOLDERS = {
+  "01": "docs/01-standards",
+  "02": "docs/02-tools",
+  "03": "docs/03-monitoring",
+  "04": "docs/04-capability",
+  "05": "docs/05-innovation"
+};
+const PILLAR_NAMES = {
+  "01": "Standards & Best Practices",
+  "02": "Tools & Technology",
+  "03": "Monitoring & Continuous Improvement",
+  "04": "Capability Building & Enablement",
+  "05": "Innovation"
+};
+
+function suggestedFolder(pillarCode, storyCode) {
+  if (!pillarCode || !PILLAR_FOLDERS[pillarCode]) return null;
+  let path = PILLAR_FOLDERS[pillarCode];
+  if (storyCode) {
+    const story = STORIES.find(s => s.code === storyCode);
+    if (story) path += "/" + story.code + " " + story.title;
+  }
+  return path + "/";
+}
+/* ---------------- full-text extraction (PDF.js / Mammoth.js) ----------------
+ * Used in two places: (1) the file attached on Register a Document is
+ * indexed for THIS browsing session only, so it's searchable even before
+ * it's emailed/filed into SharePoint; (2) once Microsoft Graph is connected
+ * (see js/graph.js), the same functions extract text from real SharePoint
+ * files so the main search bar and chatbot can match text inside them too.
+ */
+const MAX_FULLTEXT_CHARS = 200000;
+
+if (typeof pdfjsLib !== "undefined") {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3/build/pdf.worker.min.js";
+}
+
+async function extractPdfText(arrayBuffer) {
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  let text = "";
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    text += content.items.map(it => it.str).join(" ") + "\n";
+    if (text.length > MAX_FULLTEXT_CHARS) break;
+  }
+  return text.slice(0, MAX_FULLTEXT_CHARS);
+}
+
+async function extractDocxText(arrayBuffer) {
+  const result = await mammoth.extractRawText({ arrayBuffer });
+  return (result.value || "").slice(0, MAX_FULLTEXT_CHARS);
+}
+
+/**
+ * Extracts searchable full text from a File/Blob (with .name/.type/.arrayBuffer()).
+ * Returns { text, status } where status is one of:
+ * "ok" | "unsupported" (file type not handled) |
+ * "unavailable" (PDF.js/Mammoth.js failed to load) | "error" (parse failure).
+ */
+async function extractFullText(file) {
+  const nameLower = (file.name || "").toLowerCase();
+  try {
+    if (file.type === "application/pdf" || nameLower.endsWith(".pdf")) {
+      if (typeof pdfjsLib === "undefined") return { text: null, status: "unavailable" };
+      const buf = await file.arrayBuffer();
+      return { text: await extractPdfText(buf), status: "ok" };
+    }
+    if (file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" || nameLower.endsWith(".docx")) {
+      if (typeof mammoth === "undefined") return { text: null, status: "unavailable" };
+      const buf = await file.arrayBuffer();
+      return { text: await extractDocxText(buf), status: "ok" };
+    }
+    if ((file.type || "").startsWith("text/") || nameLower.endsWith(".txt") || nameLower.endsWith(".md")) {
+      const text = await file.text();
+      return { text: text.slice(0, MAX_FULLTEXT_CHARS), status: "ok" };
+    }
+    return { text: null, status: "unsupported" };
+  } catch (e) {
+    console.error("Full-text extraction failed for", file.name, e);
+    return { text: null, status: "error" };
+  }
+}
+
+/* ---------------- pending attachment (session-only search preview) ---------------- */
+const PENDING_KEY = "eatcoe_pending_attachment";
+function getPendingAttachment() {
+  try {
+    const raw = sessionStorage.getItem(PENDING_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) { return null; }
+}
+function savePendingAttachment(doc) {
+  try { sessionStorage.setItem(PENDING_KEY, JSON.stringify(doc)); } catch (e) { console.error(e); }
+}
+function clearPendingAttachment() {
+  try { sessionStorage.removeItem(PENDING_KEY); } catch (e) { /* ignore */ }
+}
+
+function initRegisterForm() {
+  const form = document.getElementById("docRegisterForm");
+  if (!form) return;
+
+  const pillarSelect = document.getElementById("rfPillar");
+  const storySelect = document.getElementById("rfStory");
+  const fileInput = document.getElementById("rfFile");
+  const fileNameLabel = document.getElementById("rfFileName");
+  const nameInput = document.getElementById("rfName");
+  const emailInput = document.getElementById("rfEmail");
+  const docNameInput = document.getElementById("rfDocName");
+  const sendBtn = document.getElementById("rfSendBtn");
+
+  // Auto-fetch name/email from the signed-in Microsoft account (falls back
+  // to the locally-stored name if SSO isn't configured yet).
+  const account = (typeof getActiveAccount === "function") ? getActiveAccount() : null;
+  if (account) {
+    if (nameInput && !nameInput.value) nameInput.value = account.name || "";
+    if (emailInput && !emailInput.value) emailInput.value = account.username || "";
+  } else if (nameInput && getUserName() !== "Guest") {
+    nameInput.value = getUserName();
+  }
+
+  function populateStoryOptions() {
+    const pillar = pillarSelect.value;
+    const current = storySelect.value;
+    storySelect.innerHTML = '<option value="">No specific story</option>' +
+      STORIES.filter(s => !pillar || s.pillarCode === pillar)
+        .map(s => `<option value="${s.code}">${escapeHtml(s.code)} · ${escapeHtml(s.title)}</option>`).join("");
+    if ([...storySelect.options].some(o => o.value === current)) storySelect.value = current;
+  }
+  populateStoryOptions();
+
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("pillar")) pillarSelect.value = params.get("pillar");
+  populateStoryOptions();
+  if (params.get("story")) storySelect.value = params.get("story");
+
+  pillarSelect.addEventListener("change", populateStoryOptions);
+
+  const tagsInput = document.getElementById("rfTags");
+
+  function currentTagsArray() {
+    return tagsInput.value.split(",").map(t => t.trim()).filter(Boolean);
+  }
+
+  // Persists whatever tags/name are currently in the form against the
+  // document's name, and refreshes the pending-attachment preview to
+  // match — called whenever either field changes, and again right before
+  // sending, so the final state is always captured regardless of the
+  // order someone fills things in.
+  function syncTagsAndPendingPreview() {
+    const name = docNameInput.value.trim();
+    const tags = currentTagsArray();
+    if (name && tags.length) {
+      setDocTagsOverride(name, tags);
+    }
+    const pending = getPendingAttachment();
+    if (pending) {
+      savePendingAttachment({ ...pending, name: name || pending.name, tags });
+    }
+  }
+
+  tagsInput.addEventListener("input", syncTagsAndPendingPreview);
+  docNameInput.addEventListener("input", syncTagsAndPendingPreview);
+
+  fileInput.addEventListener("change", async () => {
+    const file = fileInput.files[0];
+    if (!file) { clearPendingAttachment(); fileNameLabel.textContent = ""; return; }
+
+    fileNameLabel.textContent = "📎 " + file.name + " (" + Math.round(file.size / 1024) + " KB) — indexing for search…";
+    if (!docNameInput.value) docNameInput.value = file.name;
+
+    const { text, status } = await extractFullText(file);
+    const today = new Date().toISOString().slice(0, 10);
+    const name = docNameInput.value || file.name;
+    const tags = currentTagsArray();
+    savePendingAttachment({
+      id: "pending-attachment", type: "document", sourceType: "pending",
+      name,
+      pillarCode: pillarSelect.value || null, pillar: PILLAR_NAMES[pillarSelect.value] || null,
+      storyCode: storySelect.value || null,
+      tags, downloads: 0, featured: false,
+      uploadedBy: nameInput.value || getUserName(), uploadDate: today,
+      lastModifiedBy: nameInput.value || getUserName(), lastModifiedDate: today,
+      url: "register-document.html",
+      location: "📋 Pending submission — attached here, not yet emailed",
+      fullText: text, fullTextStatus: status
+    });
+    if (tags.length) setDocTagsOverride(name, tags);
+
+    fileNameLabel.textContent = "📎 " + file.name + " (" + Math.round(file.size / 1024) + " KB)" +
+      (status === "ok" ? " ·" : "");
+  });
+
+  function buildEmailContent() {
+    const name = docNameInput.value.trim() || "(untitled document)";
+    const contributor = nameInput.value.trim() || "(not provided)";
+    const contributorEmail = emailInput.value.trim();
+    const desc = document.getElementById("rfDescription").value.trim();
+    const tags = document.getElementById("rfTags").value.trim();
+    const pillar = pillarSelect.value;
+    const story = storySelect.value;
+    const folder = suggestedFolder(pillar, story);
+
+    const subject = "TREAT COE Document Submission: " + name;
+    let body = "New document submission for the TREAT COE repository.\n\n";
+    body += "Document name: " + name + "\n";
+    body += "Submitted by: " + contributor + (contributorEmail ? " (" + contributorEmail + ")" : "") + "\n";
+    body += "Pillar: " + (PILLAR_NAMES[pillar] || "Not specified") + "\n";
+    if (story) {
+      const s = STORIES.find(x => x.code === story);
+      body += "Related story: " + story + (s ? " · " + s.title : "") + "\n";
+    }
+    body += "Labels/tags: " + (tags || "none") + "\n";
+    if (folder) body += "Suggested SharePoint folder: " + folder + "\n";
+    if (desc) body += "\nDescription:\n" + desc + "\n";
+    return { subject, body };
+  }
+
+  form.addEventListener("submit", (e) => e.preventDefault());
+
+  if (sendBtn) {
+    sendBtn.addEventListener("click", async () => {
+      if (!docNameInput.value.trim() && !fileInput.files.length) {
+        alert("Please enter a document name or attach a file before sending.");
+        return;
+      }
+      if (typeof sendDocumentEmail !== "function") {
+        alert("Sending isn't available yet — this needs Microsoft sign-in with mail permission. Check that you're signed in and try again.");
+        return;
+      }
+      syncTagsAndPendingPreview();
+
+      const { subject, body } = buildEmailContent();
+      const file = fileInput.files[0] || null;
+      const originalLabel = sendBtn.textContent;
+      sendBtn.disabled = true;
+      sendBtn.textContent = "Sending…";
+
+      try {
+        const { attachmentSkipped } = await sendDocumentEmail({
+          toAddress: COE_INTAKE_EMAIL,
+          subject,
+          bodyText: body,
+          file
+        });
+        clearPendingAttachment();
+        form.reset();
+        fileNameLabel.textContent = "";
+        if (attachmentSkipped) {
+          alert("Sent — but the attached file was too large to include automatically (over 3MB) and was left out. Please share it separately.");
+        } else {
+          alert("Sent — your document submission was emailed to " + COE_INTAKE_EMAIL + (file ? " with the file attached." : "."));
+        }
+      } catch (e) {
+        console.error("Sending the document submission email failed:", e);
+        alert(
+          "Couldn't send automatically: " + (e && e.message ? e.message : e) +
+          "\n\nThis usually means Microsoft sign-in hasn't granted mail-sending permission yet — " +
+          "try signing out and back in, or check with your admin if this keeps happening."
+        );
+      } finally {
+        sendBtn.disabled = false;
+        sendBtn.textContent = originalLabel;
+      }
+    });
+  }
+}
+
+function deleteUserDocument(id) {
+  saveUserDocs(getUserDocs().filter(d => d.id !== id));
+}
+
+async function updateDocTags(doc, newTags) {
+  if (doc.sourceType === "user") {
+    // Locally-registered placeholder entries are simple, directly-owned
+    // objects — just mutate them in place.
+    const today = new Date().toISOString().slice(0, 10);
+    const docs = getUserDocs().map(d => d.id === doc.id ? { ...d, tags: newTags, lastModifiedBy: getUserName(), lastModifiedDate: today } : d);
+    saveUserDocs(docs);
+    logActivity("tag", doc.name);
+    return { synced: false }; // locally-registered docs were never shared to begin with
+  }
+  // Seed placeholders AND real Graph-sourced documents both go through
+  // the unified name-based override store — this is what actually makes
+  // "Add tag" work on real documents, which previously fell through to
+  // an id-based lookup that could never match them.
+  const result = await setDocTagsOverride(doc.name, newTags);
+  logActivity("tag", doc.name);
+  return result;
+}
+
+/**
+ * "View" — opens the document's own SharePoint page in a new tab, the same
+ * way the chatbot's links already do. This intentionally uses doc.url
+ * (SharePoint's webUrl for the item) rather than doc.downloadUrl: Graph's
+ * raw download link is specifically designed to force a download
+ * (Content-Disposition: attachment), not display content — using it here
+ * was why View opened the right tab but did the wrong thing inside it.
+ * SharePoint's own page uses Office Online / its native viewer, which
+ * actually shows the document.
+ * - Real Graph-sourced documents: doc.url is already known from the
+ *   listing and never expires, so this opens synchronously, no async
+ *   Graph call needed.
+ * - Seed/placeholder documents (no real driveId/itemId yet): tries to find
+ *   the matching real file in the live SharePoint listing by name (see
+ *   findRealDocumentByName in js/graph.js) and opens its real page instead.
+ * - Falls back to the generic shared folder link only if none of the above
+ *   works (Graph unavailable, no match found, etc).
+ */
+async function openDocument(doc) {
+  bumpDownload(doc.id);
+  logActivity("view", doc.name);
+
+  if (doc.sourceType === "graph" && doc.url) {
+    window.open(doc.url, "_blank", "noopener");
+    return;
+  }
+
+  // Seed/placeholder entry — the real file isn't known yet, so this needs
+  // an async Graph lookup. Open the destination tab synchronously now
+  // (before that lookup) to preserve the click's user-gesture, then
+  // navigate it once resolved.
+  const win = window.open("", "_blank");
+  if (win) {
+    try {
+      win.document.write(
+        '<!doctype html><title>Loading…</title>' +
+        '<body style="font-family:-apple-system,Segoe UI,Arial,sans-serif;' +
+        'display:flex;align-items:center;justify-content:center;height:100vh;' +
+        'margin:0;color:#5B6B76;background:#f5f7fb;font-size:15px;">' +
+        'Looking up "' + escapeHtml(doc.name) + '" in SharePoint…' +
+        '</body>'
+      );
+    } catch (e) { /* not critical if this fails, just cosmetic */ }
+  }
+
+  if (typeof findRealDocumentByName === "function") {
+    try {
+      const real = await findRealDocumentByName(doc.name);
+      if (real && real.url && win) {
+        win.location.href = real.url;
+        return;
+      }
+    } catch (e) {
+      console.error("Could not find the real SharePoint file for \"" + doc.name + "\", falling back to the shared folder:", e);
+    }
+  }
+
+  const fallbackUrl = doc.url || SHAREPOINT_FOLDER_URL;
+  if (win) {
+    win.location.href = fallbackUrl;
+  } else {
+    window.open(fallbackUrl, "_blank", "noopener");
+  }
+}
+
+/**
+ * Download button.
+ * - Graph-sourced documents (real SharePoint files, doc.sourceType==="graph"):
+ *   fetches the real file bytes via Microsoft Graph and downloads them for
+ *   real — see downloadGraphItem() in js/graph.js.
+ * - Seed/placeholder documents (no real driveId/itemId yet): tries to find
+ *   the matching real file in the live SharePoint listing by name first
+ *   (see findRealDocumentByName in js/graph.js), and downloads that for
+ *   real if found.
+ * - Documents uploaded through this site's old local-demo storage (if any
+ *   remain from before Graph was connected) still download from their saved
+ *   base64 bytes.
+ * - Anything else (Graph unavailable, no match found, etc) falls back to
+ *   opening the generic shared folder link.
+ */
+async function downloadDocument(doc) {
+  logActivity("download", doc.name);
+  bumpDownload(doc.id);
+
+  if (doc.sourceType === "graph" && typeof downloadGraphItem === "function") {
+    try {
+      await downloadGraphItem(doc);
+      return;
+    } catch (e) {
+      console.error("Microsoft Graph download failed, falling back to SharePoint link:", e);
+    }
+  } else if (typeof findRealDocumentByName === "function" && !doc.fileData) {
+    try {
+      const real = await findRealDocumentByName(doc.name);
+      if (real && typeof downloadGraphItem === "function") {
+        await downloadGraphItem(real);
+        return;
+      }
+    } catch (e) {
+      console.error("Could not find the real SharePoint file for \"" + doc.name + "\", falling back to SharePoint link:", e);
+    }
+  }
+
+  if (doc.fileData) {
+    const a = document.createElement("a");
+    a.href = doc.fileData;
+    a.download = doc.name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    return;
+  }
+
+  window.open(doc.url || SHAREPOINT_FOLDER_URL, "_blank", "noopener");
+}
+
+/* ---------------- story status (dashboard-only editing) ---------------- */
+function getStatusOverrides() { return lsGet(LS.statusOverrides, {}); }
+function saveStatusOverrides(obj) { lsSet(LS.statusOverrides, obj); }
+function getStoriesWithStatus() {
+  const overrides = getStatusOverrides();
+  return STORIES.map(s => ({ ...s, status: overrides[s.code] || s.status }));
+}
+function setStoryStatus(code, status) {
+  const overrides = getStatusOverrides();
+  overrides[code] = status;
+  saveStatusOverrides(overrides);
+  logActivity("status", "Story " + code + " → " + status);
+}
+
+/* ---------------- unified search (stories + documents) ---------------- */
+function escapeHtml(str) {
+  return String(str).replace(/[&<>"']/g, s => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  }[s]));
+}
+
+function buildSnippet(text, words) {
+  if (!text) return null;
+  const lower = text.toLowerCase();
+  let idx = -1;
+  for (const w of words) {
+    idx = lower.indexOf(w);
+    if (idx !== -1) break;
+  }
+  if (idx === -1) return null;
+  const start = Math.max(0, idx - 60);
+  const end = Math.min(text.length, idx + 120);
+  let snippet = text.slice(start, end).replace(/\s+/g, " ").trim();
+  if (start > 0) snippet = "…" + snippet;
+  if (end < text.length) snippet = snippet + "…";
+  return snippet;
+}
+
+function searchAll(query, { pillar = "All", typeFilter = "All" } = {}) {
+  const q = query.trim().toLowerCase();
+  const words = q.split(/\s+/).filter(Boolean);
+  const pool = [...getStoriesWithStatus(), ...getAllDocuments()];
+
+  let list = pool;
+  if (pillar !== "All") list = list.filter(d => d.pillarCode === pillar);
+  if (typeFilter !== "All") list = list.filter(d => d.type === typeFilter);
+
+  if (!words.length) return list;
+
+  const scored = list.map(item => {
+    const metaText = [
+      item.code || "", item.title || item.name || "", item.pillar, item.status || "",
+      item.owner || item.uploadedBy || "", item.description || "", (item.tags || []).join(" ")
+    ].join(" ").toLowerCase();
+    const fullTextLower = (item.fullText || "").toLowerCase();
+
+    let score = 0;
+    let matchedInBody = false;
+    for (const w of words) {
+      if (metaText.includes(w)) {
+        score += 1;
+        if ((item.title || item.name || "").toLowerCase().includes(w)) score += 1;
+        if ((item.code || "").toLowerCase() === w) score += 3;
+      }
+      // Full-text matches count too, but weighted lower than metadata —
+      // finding a word once buried in a 10-page document is a weaker
+      // signal than it appearing in the title or tags.
+      if (fullTextLower && fullTextLower.includes(w)) {
+        score += 0.5;
+        matchedInBody = true;
+      }
+    }
+    if (score <= 0) return null;
+    const resultItem = matchedInBody ? { ...item, _snippet: buildSnippet(item.fullText, words) } : item;
+    return { item: resultItem, score };
+  }).filter(Boolean);
+
+  scored.sort((a, b) => b.score - a.score);
+  return scored.map(r => r.item);
+}
+
+/**
+ * Filters strictly to items that actually have `tagName` as one of their
+ * real tags — an exact match, not a substring search. This is what a
+ * confirmed tag selection (clicking a #tag suggestion, or typing #tagname
+ * and pressing Enter) should use instead of searchAll()'s broad keyword
+ * matching, which would otherwise also match any unrelated text that
+ * happens to contain those letters (e.g. searching the tag "hs" matching
+ * the word "pa-THS" or "walkthrou-GHS" purely by coincidence).
+ */
+function filterByExactTag(tagName, { pillar = "All", typeFilter = "All" } = {}) {
+  const target = (tagName || "").trim().toLowerCase();
+  const pool = [...getStoriesWithStatus(), ...getAllDocuments()];
+  return pool.filter(item => {
+    if (pillar !== "All" && item.pillarCode !== pillar) return false;
+    if (typeFilter !== "All" && item.type !== typeFilter) return false;
+    return (item.tags || []).some(t => (t || "").trim().toLowerCase() === target);
+  });
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  loadStoredTags(); // fire-and-forget — fast, same-origin fetch; ready well before anyone types "#"
+  loadSharedTags(); // fire-and-forget — cross-user tags from SharePoint, merges in once loaded
+  ensureSeedActivity();
+  initRoleSwitcher();
+  initNavDropdowns();
+  initHeroSearch();
+  renderQuickLinks();
+  renderDocumentsPage();
+  renderStoryDocSections();
+  renderDashboardExtras();
+  initRegisterForm();
+});
+
+/* ---------------- nav dropdown (mobile tap-to-open) ---------------- */
+function initNavDropdowns() {
+  document.querySelectorAll(".nav-item").forEach(item => {
+    const trigger = item.querySelector(":scope > a");
+    if (!trigger) return;
+    trigger.addEventListener("click", (e) => {
+      if (window.innerWidth > 900) return;
+      e.preventDefault();
+      item.classList.toggle("open");
+    });
+  });
+  const toggle = document.querySelector(".nav-toggle");
+  if (toggle) toggle.addEventListener("click", () => document.querySelector(".site-nav").classList.toggle("open"));
+}
+
+/* ---------------- home hero: search + pillar filter ---------------- */
+let activePillar = "All";
+
+function filterPillar(code, btn) {
+  activePillar = code;
+  document.querySelectorAll("#filterPills button").forEach(b => b.classList.remove("active"));
+  if (btn) btn.classList.add("active");
+  runHeroSearch();
+}
+
+// Curated base vocabulary of tags (data/tags.json) — maintained as a plain
+// data file so tags can be added/edited without touching code. Merged with
+// whatever tags actually exist on real documents right now, so the #
+// browser shows a useful list from day one, before anyone's tagged
+// anything, while still picking up genuinely new tags people add later.
+let STORED_TAGS = [];
+async function loadStoredTags() {
+  try {
+    const res = await fetch("data/tags.json");
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const list = await res.json();
+    STORED_TAGS = Array.isArray(list) ? list.filter(Boolean) : [];
+  } catch (e) {
+    console.warn("Could not load data/tags.json — the # tag browser will only show tags currently in use on documents.", e);
+    STORED_TAGS = [];
+  }
+}
+
+function getAllKnownTags() {
+  // Case-insensitive dedupe: keeps the first-seen casing for display, but
+  // treats "sop" and "SOP" as the same tag rather than two separate ones —
+  // even though tags are stored exactly as typed, this keeps the
+  // suggestion list from showing the same tag twice in different casing.
+  const seen = new Map(); // lowercase -> original-cased display value
+  STORED_TAGS.forEach(t => { if (t && !seen.has(t.toLowerCase())) seen.set(t.toLowerCase(), t); });
+  getAllDocuments().forEach(d => (d.tags || []).forEach(t => { if (t && !seen.has(t.toLowerCase())) seen.set(t.toLowerCase(), t); }));
+  return [...seen.values()].sort((a, b) => a.localeCompare(b));
+}
+
+function selectTagFromSuggestion(tag) {
+  const input = document.getElementById("searchInput");
+  if (!input) return;
+  input.value = "#" + tag;
+  input.dataset.confirmedTag = tag; // marks this exact value as "selected", not "still typing"
+  runHeroSearch();
+  input.focus();
+}
+
+/**
+ * Renders the "# tag browser" HTML for a given query — shared by the Home
+ * hero search and the Documents page search, so both behave identically.
+ * `onSelectFnName` is the name of a global function to call (with the
+ * chosen tag) when a suggestion is clicked — different for each search box
+ * since they need to update different inputs.
+ */
+function renderTagSuggestionsHtml(query, onSelectFnName) {
+  const partial = query.slice(1).trim().toLowerCase();
+  const allTags = getAllKnownTags();
+  // "Starts with", not "contains anywhere" — typing "sf" should suggest
+  // tags that begin with sf, not "salesforce" (which merely contains "sf"
+  // in the middle). This matches how autocomplete/browsing normally works
+  // and keeps it consistent with the exact-match rule used once a tag is
+  // actually confirmed.
+  const matches = partial ? allTags.filter(t => t.toLowerCase().startsWith(partial)) : allTags;
+  if (!allTags.length) {
+    return `<div class="results-empty">No tags exist yet — tag a document (via Add Tag) to start building this list.</div>`;
+  }
+  if (!matches.length) {
+    return `<div class="results-empty">No tags match "${escapeHtml(partial)}".</div>`;
+  }
+  return `
+    <div class="tag-suggest-hint">Browsing tags — click one to search by it</div>
+    <div class="tag-suggest-list">
+      ${matches.map(t => `<button type="button" class="tag-suggest-pill" onclick='${onSelectFnName}(${JSON.stringify(t)})'>#${escapeHtml(t)}</button>`).join("")}
+    </div>`;
+}
+
+function runHeroSearch() {
+  const box = document.getElementById("heroResults");
+  const input = document.getElementById("searchInput");
+  if (!box || !input) return;
+  const q = input.value.trim();
+
+  // Once a tag has been picked from the suggestion list, the box shows
+  // "#tagname" (kept visible on purpose) — but that's now a CONFIRMED
+  // search, not someone still browsing tags, so it must not re-trigger the
+  // suggestion list just because it starts with "#". Any further editing
+  // (the value no longer matching exactly) clears this and goes back to
+  // normal behavior.
+  const confirmedTag = input.dataset.confirmedTag;
+  const isConfirmedTagSearch = confirmedTag && q === "#" + confirmedTag;
+  if (confirmedTag && !isConfirmedTagSearch) {
+    delete input.dataset.confirmedTag;
+  }
+
+  if (q.startsWith("#") && !isConfirmedTagSearch) {
+    // Tag-browsing mode: show all known tags (filtered by whatever comes
+    // after the #, if anything) as clickable suggestions, rather than
+    // running a normal search — lets people discover available tags
+    // instead of needing to already know exact tag names.
+    box.classList.add("show");
+    box.innerHTML = renderTagSuggestionsHtml(q, "selectTagFromSuggestion");
+    return;
+  }
+
+  if (!q && activePillar === "All") {
+    box.classList.remove("show");
+    box.innerHTML = "";
+    return;
+  }
+
+  const list = isConfirmedTagSearch
+    ? filterByExactTag(confirmedTag, { pillar: activePillar })
+    : searchAll(q, { pillar: activePillar });
+  box.classList.add("show");
+  if (list.length === 0) {
+    box.innerHTML = `<div class="results-empty">No results. Try a different pillar or keyword.</div>`;
+    return;
+  }
+  box.innerHTML = list.slice(0, 14).map(renderResultCard).join("");
+}
+
+function renderResultCard(item) {
+  const isStory = item.type === "story";
+  const title = isStory ? item.title : item.name;
+  const meta = isStory ? `${escapeHtml(item.pillar)} · Owner: ${escapeHtml(item.owner)}` : `${escapeHtml(item.pillar || "Unlinked")} · ${escapeHtml(item.location || "SharePoint")}${storyLinkHtml(item)}`;
+  const desc = isStory ? item.description : `Tags: ${(item.tags || []).join(", ") || "—"}`;
+  // Stories show their tags too now, as a separate small line — previously
+  // only documents displayed "Tags: ...", making it look like a matching
+  // story had none, when it may well have a real tag baked into its own
+  // data (like story 1.1's "sop" tag) that just wasn't shown anywhere.
+  const storyTagsHtml = (isStory && (item.tags || []).length)
+    ? `<p class="rc-story-tags">Tags: ${escapeHtml(item.tags.join(", "))}</p>`
+    : "";
+  const link = isStory ? item.url : "#";
+  const onclick = isStory ? "" : `onclick="openDocument(${JSON.stringify(item).replace(/"/g, '&quot;')});return false;"`;
+  const statusChip = isStory ? `<span class="chip ${item.status.toLowerCase().replace(/\s+/g, '')}">${escapeHtml(item.status)}</span>` : "";
+  const snippetHtml = item._snippet
+    ? `<p class="body-match">: “${escapeHtml(item._snippet)}”</p>`
+    : "";
+  return `
+    <div class="result-card">
+      <div class="rc-top">
+        <a class="rc-title" href="${link}" ${onclick}>${item.code ? escapeHtml(item.code) + " · " : ""}${escapeHtml(title)}</a>
+        <span style="display:flex;gap:6px;align-items:center">
+          <span class="type-badge ${item.type}">${item.type}</span>${statusChip}
+        </span>
+      </div>
+      <div class="rc-meta">${meta}</div>
+      <p>${escapeHtml(desc)}</p>
+      ${storyTagsHtml}
+      ${snippetHtml}
+    </div>`;
+}
+
+function initHeroSearch() {
+  const input = document.getElementById("searchInput");
+  if (!input) return;
+  input.addEventListener("input", runHeroSearch);
+}
+
+/* ---------------- home: quick links ---------------- */
+function renderQuickLinks() {
+  const root = document.getElementById("quickLinks");
+  if (!root) return;
+
+  if (isGraphStillLoading()) {
+    root.innerHTML = graphLoadingHtml();
+    return;
+  }
+
+  const all = getAllDocuments();
+
+  // "Featured" = tagged "featured" (case-insensitive) — reuses the existing
+  // Add Tag mechanism, so any Contributor can curate this list just by
+  // tagging a document, with no separate feature/admin panel needed. If
+  // nothing's tagged yet, falls back silently to one doc per pillar so
+  // this block is never empty.
+  let featured = all.filter(d => (d.tags || []).some(t => t.toLowerCase() === "featured")).slice(0, 4);
+  if (!featured.length && all.length) {
+    featured = pickOnePerPillar(all, 4);
+  }
+
+  const mostDownloaded = [...all].sort((a, b) => b.downloads - a.downloads).slice(0, 4);
+  const recentlyModified = [...all].sort((a, b) => (b.lastModifiedDate || "").localeCompare(a.lastModifiedDate || "")).slice(0, 4);
+
+  const col = (title, items, sub, emptyMessage) => `
+    <div class="ql-card">
+      <h4>${title}</h4>
+      ${items.length ? `<ul>${items.map(d => `<li><a href="#" onclick='openDocument(${JSON.stringify(d).replace(/'/g, "&apos;")});return false;'>${escapeHtml(d.name)}</a><span>${sub(d)}</span></li>`).join("")}</ul>` : `<div class="ql-empty">${emptyMessage || "Nothing here yet."}</div>`}
+    </div>`;
+
+  root.innerHTML = [
+    col("Featured Documents", featured, d => d.pillar || "General", 'Tag a document "featured" (via Add Tag) to feature it here.'),
+    col("Most Downloaded", mostDownloaded, d => d.downloads + " opens"),
+    col("Recently Modified", recentlyModified, d => "Updated " + d.lastModifiedDate)
+  ].join("");
+}
+
+/**
+ * Picks up to `count` documents, preferring one from each pillar (in
+ * pillar order) before repeating, so a fallback "featured" list feels like
+ * a representative sample of the whole library rather than an arbitrary
+ * slice.
+ */
+function pickOnePerPillar(docs, count) {
+  const byPillar = {};
+  const unlinked = [];
+  docs.forEach(d => {
+    if (d.pillarCode) {
+      (byPillar[d.pillarCode] = byPillar[d.pillarCode] || []).push(d);
+    } else {
+      unlinked.push(d);
+    }
+  });
+  const pillarOrder = Object.keys(byPillar).sort();
+  const picks = [];
+  for (const p of pillarOrder) {
+    if (picks.length >= count) break;
+    picks.push(byPillar[p][0]);
+  }
+  const remaining = [...pillarOrder.flatMap(p => byPillar[p].slice(1)), ...unlinked];
+  for (const d of remaining) {
+    if (picks.length >= count) break;
+    picks.push(d);
+  }
+  return picks.slice(0, count);
+}
+/* ---------------- documents.html: full catalog ---------------- */
+function selectTagForDocSearch(tag) {
+  const input = document.getElementById("docSearch");
+  if (!input) return;
+  input.value = "#" + tag;
+  input.dataset.confirmedTag = tag;
+  input.dispatchEvent(new Event("input"));
+  input.focus();
+}
+
+/**
+ * Compares story codes like "1.1", "1.10", "2.4" numerically segment by
+ * segment, rather than as plain strings — a plain string sort would
+ * incorrectly place "1.10" before "1.2".
+ */
+function compareStoryCodes(a, b) {
+  const pa = (a || "").split(".").map(n => parseInt(n, 10) || 0);
+  const pb = (b || "").split(".").map(n => parseInt(n, 10) || 0);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const diff = (pa[i] || 0) - (pb[i] || 0);
+    if (diff !== 0) return diff;
+  }
+  return 0;
+}
+
+/**
+ * Groups documents by their story (folder numbering, e.g. 1.1, 1.2, 1.3),
+ * sorted numerically. Documents with no recognized story fall into a
+ * trailing "Not linked to a specific story" group instead of being
+ * silently dropped.
+ */
+// Which story groups are currently expanded — tracked separately from the
+// DOM because renderGroupedDocuments() rebuilds the HTML from scratch on
+// every call (including background refreshes during full-text indexing),
+// which would otherwise silently reset every group back to closed right
+// after someone opens it.
+let openDocGroups = new Set();
+
+function renderGroupedDocuments(docs, pillarFilter) {
+  pillarFilter = pillarFilter || "All";
+  const docsByStory = {};
+  const unlinked = [];
+  docs.forEach(d => {
+    if (d.storyCode) {
+      (docsByStory[d.storyCode] = docsByStory[d.storyCode] || []).push(d);
+    } else {
+      unlinked.push(d);
+    }
+  });
+
+  // Every story in the pillar (or all pillars), in linear numeric order —
+  // not just the ones that happen to already have a document — so a story
+  // with nothing linked yet still shows up with a clear "No documents
+  // exist" placeholder instead of silently disappearing from the list.
+  const stories = STORIES
+    .filter(s => pillarFilter === "All" || s.pillarCode === pillarFilter)
+    .slice()
+    .sort((a, b) => compareStoryCodes(a.code, b.code));
+
+  if (!stories.length && !unlinked.length) {
+    return `<div class="results-empty">No documents match.</div>`;
+  }
+
+  const groupHtml = (code, title, list) => `
+    <details class="doc-group" data-group-key="${escapeHtml(code || "__unlinked__")}" ${openDocGroups.has(code || "__unlinked__") ? "open" : ""}>
+      <summary class="doc-group-header">
+        <span class="doc-group-toggle-icon">▸</span>
+        ${code ? `<span class="doc-group-code">${escapeHtml(code)}</span>` : ""}
+        <span class="doc-group-title">${escapeHtml(title)}</span>
+        <span class="doc-group-count">${list.length ? list.length + " document" + (list.length === 1 ? "" : "s") : "No documents"}</span>
+      </summary>
+      <div class="doc-group-body">${list.length ? list.map(d => docRowHtml(d)).join("") : `<div class="ql-empty">No documents exist.</div>`}</div>
+    </details>`;
+
+  let html = `<div class="doc-group-toolbar">
+      <button type="button" class="doc-group-toggle-all" onclick="setAllDocGroups(true)">Expand all</button>
+      <button type="button" class="doc-group-toggle-all" onclick="setAllDocGroups(false)">Collapse all</button>
+    </div>`;
+
+  stories.forEach(story => {
+    html += groupHtml(story.code, story.title, docsByStory[story.code] || []);
+  });
+  if (unlinked.length) {
+    html += groupHtml(null, "Not linked to a specific story", unlinked);
+  }
+  return html;
+}
+
+function setAllDocGroups(open) {
+  document.querySelectorAll("#docCatalog .doc-group").forEach(d => {
+    d.open = open;
+    const key = d.dataset.groupKey;
+    if (open) openDocGroups.add(key);
+    else openDocGroups.delete(key);
+  });
+}
+
+// Event delegation: whenever any group is toggled by hand (clicking its
+// header), record that in the persistent set so the next re-render
+// respects it instead of defaulting back to closed.
+document.addEventListener("toggle", (e) => {
+  if (!e.target.classList || !e.target.classList.contains("doc-group")) return;
+  const key = e.target.dataset.groupKey;
+  if (!key) return;
+  if (e.target.open) openDocGroups.add(key);
+  else openDocGroups.delete(key);
+}, true);
+
+function renderDocumentsPage() {
+  const root = document.getElementById("docCatalog");
+  if (!root) return;
+
+  const searchBox = document.getElementById("docSearch");
+  const pillarSelect = document.getElementById("docPillarFilter");
+
+  function draw() {
+    if (isGraphStillLoading()) {
+      root.innerHTML = graphLoadingHtml();
+      return;
+    }
+    const q = searchBox ? searchBox.value.trim() : "";
+
+    const confirmedTag = searchBox ? searchBox.dataset.confirmedTag : null;
+    const isConfirmedTagSearch = confirmedTag && q === "#" + confirmedTag;
+    if (searchBox && confirmedTag && !isConfirmedTagSearch) {
+      delete searchBox.dataset.confirmedTag;
+    }
+
+    if (q.startsWith("#") && !isConfirmedTagSearch) {
+      // Same # tag-browsing behavior as the Home page search — click a
+      // suggested tag to search by it.
+      root.innerHTML = renderTagSuggestionsHtml(q, "selectTagForDocSearch");
+      return;
+    }
+
+    const pillar = pillarSelect ? pillarSelect.value : "All";
+    const searchTerm = isConfirmedTagSearch ? confirmedTag : q;
+
+    if (searchTerm) {
+      // Actively searching — a flat, relevance-sorted list is more useful
+      // here than grouped/collapsed sections.
+      let list = isConfirmedTagSearch
+        ? filterByExactTag(confirmedTag, { pillar, typeFilter: "document" })
+        : searchAll(searchTerm, { pillar, typeFilter: "document" });
+      list.sort((a, b) => (b.lastModifiedDate || "").localeCompare(a.lastModifiedDate || ""));
+      root.innerHTML = list.length ? list.map(d => docRowHtml(d)).join("") : `<div class="results-empty">No documents match.</div>`;
+      return;
+    }
+
+    // Default browsing view: grouped by story (folder numbering), sorted
+    // numerically, collapsed by default.
+    const list = getAllDocuments().filter(d => pillar === "All" || d.pillarCode === pillar);
+    root.innerHTML = renderGroupedDocuments(list, pillar);
+  }
+
+  if (searchBox) searchBox.addEventListener("input", draw);
+  if (pillarSelect) pillarSelect.addEventListener("change", draw);
+  draw();
+}
+
+/**
+ * If a document belongs to a tracked story (via storyCode), returns a
+ * small clickable link to that story's page — lets someone go straight
+ * from a document to the deliverable it's part of, not just the file
+ * itself. Returns "" if the document isn't linked to any story.
+ */
+function storyLinkHtml(doc) {
+  if (!doc.storyCode) return "";
+  const story = STORIES.find(s => s.code === doc.storyCode);
+  if (!story) return "";
+  return ` · <a class="story-link" href="${story.url}">📁 ${escapeHtml(story.code)} ${escapeHtml(story.title)}</a>`;
+}
+
+function docRowHtml(d) {
+  const canManage = d.sourceType === "user";
+  const isPending = d.sourceType === "pending";
+  let indexBadge = "";
+  if (d.fullText) {
+    indexBadge = '<span class="type-badge story" title="Every line of this document is searchable"></span>';
+  } else if ((d.sourceType === "user" || isPending) && d.fullTextStatus === "unsupported") {
+    indexBadge = '<span class="sso-note">(full-text search not available for this file type)</span>';
+  }
+  const pendingTag = isPending ? '<span class="type-badge document" title="Attached on the Register a Document page — not yet emailed">📋 pending submission</span>' : "";
+  const actions = isPending
+    ? `<span class="sso-note">Fill out and send the form above to submit this ↑</span>`
+    : `<button onclick='downloadDocument(${JSON.stringify(d).replace(/'/g, "&apos;")})'>⬇ Download</button>
+       <button onclick='openDocument(${JSON.stringify(d).replace(/'/g, "&apos;")})'>↗ View</button>
+       ${canManage ? `<button class="danger contributor-only" onclick="handleDeleteDoc('${d.id}')">Remove</button>` : ""}`;
+  return `
+    <div class="doc-row" data-doc-id="${d.id}">
+      <div class="dr-main">
+        <div class="dr-name">📄 ${escapeHtml(d.name)} ${(d.tags || []).some(t => t.toLowerCase() === "featured") ? '<span class="type-badge document">featured</span>' : ""}${pendingTag} ${indexBadge}</div>
+        <div class="dr-meta">${escapeHtml(d.pillar || "Unlinked")} · Uploaded by ${escapeHtml(d.uploadedBy)} on ${d.uploadDate} · Last modified by ${escapeHtml(d.lastModifiedBy)} on ${d.lastModifiedDate} · ${d.downloads} opens${storyLinkHtml(d)}</div>
+        <div class="dr-tags" id="tags-${d.id}">${renderTagPills(d)}</div>
+        ${d._snippet ? `<p class="body-match" style="margin-top:8px">: “${escapeHtml(d._snippet)}”</p>` : ""}
+        <div class="contributor-only tag-add-form">
+          <input type="text" placeholder="add tag…" id="newtag-${d.id}">
+          <button type="button" onclick="handleAddTag('${d.id}')">Add tag</button>
+        </div>
+      </div>
+      <div class="dr-actions">
+        ${actions}
+      </div>
+    </div>`;
+}
+
+function renderTagPills(d) {
+  return (d.tags || []).map(t => `<span class="tag-pill">${escapeHtml(t)}<span class="rm contributor-only" onclick="handleRemoveTag('${d.id}','${escapeHtml(t)}')">&times;</span></span>`).join("") || `<span class="ql-empty">No tags</span>`;
+}
+
+function findDocById(id) { return getAllDocuments().find(d => d.id === id); }
+
+async function handleAddTag(id) {
+  const input = document.getElementById("newtag-" + id);
+  const rawVal = input.value.trim();
+  if (!rawVal) return;
+  const doc = findDocById(id);
+  if (!doc) return;
+  const val = rawVal; // preserve exactly as typed — no forced lowercasing
+  const existingTags = doc.tags || [];
+  // Case-insensitive check only — prevents "sop" and "SOP" existing as two
+  // separate tags on the same document, without changing the casing of
+  // whichever one was actually typed.
+  const alreadyHasIt = existingTags.some(t => t.toLowerCase() === val.toLowerCase());
+  const tags = alreadyHasIt ? existingTags : [...existingTags, val];
+  input.value = "";
+  // The local save inside updateDocTags happens synchronously before any
+  // network call — calling it here (without awaiting) and refreshing
+  // right away shows the new tag instantly, instead of waiting on the
+  // slower SharePoint sync to finish first. The sync itself still runs,
+  // just in the background.
+  const syncPromise = updateDocTags(doc, tags);
+  refreshDocViews();
+  syncPromise.then(result => {
+    if (result && result.synced === false && result.error) {
+      console.warn('Tag "' + val + '" saved locally only — not yet visible to teammates. Ask your admin to grant Sites.ReadWrite.All for shared tags to sync across the team.');
+    }
+  });
+}
+function handleRemoveTag(id, tag) {
+  const doc = findDocById(id);
+  if (!doc) return;
+  updateDocTags(doc, (doc.tags || []).filter(t => t !== tag));
+  refreshDocViews();
+}
+function handleDeleteDoc(id) {
+  deleteUserDocument(id);
+  refreshDocViews();
+  showToast("Removed from your local catalog. Nothing was deleted in SharePoint.", "success");
+}
+function refreshDocViews() {
+  // Background events (like full-text indexing finishing one file at a
+  // time) call this repeatedly — each call replaces the document rows'
+  // HTML wholesale, which destroys and recreates any input inside them,
+  // including whatever a person is actively typing into an "add tag" box.
+  // If that's currently focused, skip re-rendering the rows this time
+  // (their content will simply catch up on the next refresh, e.g. right
+  // after "Add tag" is clicked) — Quick Links doesn't contain any inputs,
+  // so it's always safe to update.
+  const active = document.activeElement;
+  const isEditingTagInput = !!(active && active.id && active.id.indexOf("newtag-") === 0);
+  if (!isEditingTagInput) {
+    renderDocumentsPage();
+    renderStoryDocSections();
+  }
+  renderQuickLinks();
+}
+
+/* ---------------- pillar pages: per-story document sections ---------------- */
+function renderStoryDocSections() {
+  document.querySelectorAll("[data-story-docs]").forEach(container => {
+    const code = container.getAttribute("data-story-docs");
+    const story = STORIES.find(s => s.code === code);
+    const registerHref = `register-document.html?pillar=${story ? story.pillarCode : ""}&story=${code}`;
+
+    if (isGraphStillLoading()) {
+      container.innerHTML = `<h4>Documents for this deliverable</h4>` + graphLoadingHtml();
+      return;
+    }
+
+    const docs = getDocsForStory(code);
+    const groupKey = "pillar-page-" + code;
+    container.innerHTML = `
+      <details class="doc-group" data-group-key="${escapeHtml(groupKey)}" ${openDocGroups.has(groupKey) ? "open" : ""}>
+        <summary class="doc-group-header">
+          <span class="doc-group-toggle-icon">▸</span>
+          <span class="doc-group-title">Documents for this deliverable</span>
+          <span class="doc-group-count">${docs.length} document${docs.length === 1 ? "" : "s"}</span>
+        </summary>
+        <div class="doc-group-body">
+          ${docs.length ? docs.map(docRowHtml).join("") : `<div class="ql-empty">No documents exist.</div>`}
+          <a class="doc-link" href="${registerHref}" style="margin-top:10px">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+            Register a document for this deliverable
+          </a>
+        </div>
+      </details>`;
+  });
+}
+
+/* ---------------- dashboard: metrics, activity tracker, story table ---------------- */
+function renderDashboardExtras() {
+  renderMetrics();
+  renderActivityTracker();
+  renderStoryTable();
+}
+
+function renderMetrics() {
+  const root = document.getElementById("dashMetrics");
+  if (!root) return;
+  const docs = getAllDocuments();
+  const totalDownloads = docs.reduce((sum, d) => sum + (d.downloads || 0), 0);
+  const activity = getActivity();
+  const contributors = new Set(activity.filter(a => ["upload", "tag", "status"].includes(a.type)).map(a => a.actor));
+  root.innerHTML = `
+    <div class="metric-card"><div class="n">${docs.length}</div><div class="l">Documents in repository</div></div>
+    <div class="metric-card"><div class="n">${totalDownloads}</div><div class="l">Total opens / downloads</div></div>
+    <div class="metric-card"><div class="n">${contributors.size}</div><div class="l">Active contributors</div></div>`;
+}
+
+function renderActivityTracker() {
+  const barsRoot = document.getElementById("activityBars");
+  const logRoot = document.getElementById("activityLog");
+  if (!barsRoot && !logRoot) return;
+  const activity = getActivity();
+
+  const days = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    days.push(d.toISOString().slice(0, 10));
+  }
+  const counts = days.map(day => activity.filter(a => a.timestamp === day).length);
+  const max = Math.max(1, ...counts);
+
+  if (barsRoot) {
+    barsRoot.innerHTML = days.map((day, i) => {
+      const h = Math.round((counts[i] / max) * 90) + 4;
+      const label = new Date(day).toLocaleDateString(undefined, { weekday: "short" });
+      return `<div class="ab-col"><div class="ab-count">${counts[i]}</div><div class="ab-bar" style="height:${h}px"></div><div class="ab-label">${label}</div></div>`;
+    }).join("");
+  }
+
+  if (logRoot) {
+    const recent = [...activity].reverse().slice(0, 12);
+    const verbs = { upload: "uploaded", download: "downloaded", view: "viewed", tag: "updated tags on", status: "updated" };
+    logRoot.innerHTML = recent.map(a => `<div class="al-item"><span>${escapeHtml(a.actor)} ${verbs[a.type] || a.type} <b>${escapeHtml(a.target)}</b></span><span>${a.timestamp}</span></div>`).join("") || `<div class="ql-empty">No activity yet.</div>`;
+  }
+}
+
+function renderStoryTable() {
+  const root = document.getElementById("storyTableBody");
+  if (!root) return;
+  const stories = getStoriesWithStatus();
+  const statuses = ["Done", "In Progress", "To Do", "Backlog"];
+  root.innerHTML = stories.map(s => `
+    <tr>
+      <td><a href="${s.url}">${s.code}</a></td>
+      <td>${escapeHtml(s.title)}</td>
+      <td>${escapeHtml(s.pillar)}</td>
+      <td>${escapeHtml(s.owner)}</td>
+      <td>
+        <span class="viewer-only-status chip ${s.status.toLowerCase().replace(/\s+/g, '')}">${escapeHtml(s.status)}</span>
+        <select class="contributor-only" style="display:none" onchange="handleStatusChange('${s.code}', this.value)">
+          ${statuses.map(st => `<option value="${st}" ${st === s.status ? "selected" : ""}>${st}</option>`).join("")}
+        </select>
+      </td>
+    </tr>`).join("");
+  syncStatusEditors();
+}
+
+function syncStatusEditors() {
+  const isContributor = getRole() === "contributor";
+  document.querySelectorAll(".story-table select.contributor-only").forEach(s => s.style.display = isContributor ? "inline-block" : "none");
+  document.querySelectorAll(".story-table .viewer-only-status").forEach(s => s.style.display = isContributor ? "none" : "inline-block");
+}
+
+function handleStatusChange(code, status) {
+  setStoryStatus(code, status);
+  renderStoryTable();
+  renderActivityTracker();
+}
+
+/* re-sync role-dependent UI whenever role changes */
+/* role changes automatically re-sync status editors via setRole() above */
+
+/* ---------------- chatbot ---------------- */
+let chatbotOpen = false;
+function toggleChatbot() {
+  const win = document.getElementById("chatbot-window");
+  chatbotOpen = !chatbotOpen;
+  win.classList.toggle("open", chatbotOpen);
+}
+function sendMessage() {
+  const input = document.getElementById("chat-input");
+  const message = input.value.trim();
+  if (message === "") return;
+  addUserMessage(message);
+  answerFromKnowledgeBase(message);
+  input.value = "";
+}
+function addUserMessage(message) {
+  const body = document.getElementById("chat-body");
+  body.innerHTML += `<div class="user-message">${escapeHtml(message)}</div>`;
+  body.scrollTop = body.scrollHeight;
+}
+function addBotMessage(html) {
+  const body = document.getElementById("chat-body");
+  body.innerHTML += `<div class="bot-message">${html}</div>`;
+  body.scrollTop = body.scrollHeight;
+}
+function answerFromKnowledgeBase(keyword) {
+  const results = searchAll(keyword);
+  if (results.length === 0) {
+    addBotMessage("I couldn't find a match. Try a pillar name, a deliverable code (e.g. \"3.6\"), a document keyword, or even a phrase from inside an uploaded document.");
+    return;
+  }
+  let html = "<b>I found these:</b><ul>";
+  results.slice(0, 6).forEach(item => {
+    const isStory = item.type === "story";
+    const title = isStory ? `${item.code} ${item.title}` : item.name;
+    const href = isStory ? item.url : (item.url || SHAREPOINT_FOLDER_URL);
+    html += `<li>${isStory ? "📁" : "📄"} <a href="${href}" target="${isStory ? "_self" : "_blank"}">${escapeHtml(title)}</a> <span style="color:#5B6B7A">(${item.type})</span>`;
+    if (item._snippet) {
+      html += `<br><span style="color:#5B6B7A;font-size:11.5px"> “${escapeHtml(item._snippet)}”</span>`;
+    }
+    html += `</li>`;
+  });
+  html += "</ul>";
+  addBotMessage(html);
+}
+
+/* ---------------- about modal ---------------- */
+function toggleAbout() {
+  const overlay = document.getElementById("about-overlay");
+  const modal = document.getElementById("about-modal");
+  if (!overlay || !modal) return;
+  const isOpen = modal.classList.contains("open");
+  overlay.classList.toggle("open", !isOpen);
+  modal.classList.toggle("open", !isOpen);
+}

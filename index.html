@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>About TREAT · TREAT COE</title>
+  <link rel="stylesheet" href="assets/style.css">
+
+</head>
+
+<body>
+  <header class="site-header">
+    <a class="logo" href="index.html">
+      <img src="assets/treat.png" alt="TREAT logo">
+      <span class="lt"><i>Tx’s Repository For Enterprise Applications Testing</i></span>
+    </a>
+    <button class="nav-toggle" aria-label="Toggle navigation menu">&#9776;</button>
+    <nav class="site-nav">
+      <a class="nav-flat active" href="index.html">Home</a>
+      <div class="nav-item">
+        <a class="" href="about.html">About <span class="caret">▾</span></a>
+        <div class="nav-dropdown">
+          <a href="about.html">About TREAT</a>
+        </div>
+      </div>
+      <div class="nav-item">
+        <a class="" href="index.html#pillars">Pillars <span class="caret">▾</span></a>
+        <div class="nav-dropdown">
+          <a href="01-standards.html">01 · Standards & Best Practices</a>
+          <a href="02-tools.html">02 · Tools & Technology</a>
+          <a href="03-monitoring.html">03 · Monitoring & Continuous Improvement</a>
+          <a href="04-capability.html">04 · Capability Building & Enablement</a>
+          <a href="05-innovation.html">05 · Innovation</a>
+        </div>
+      </div>
+      <div class="nav-item">
+        <a class="" href="documents.html">Documents <span class="caret">▾</span></a>
+        <div class="nav-dropdown">
+          <a href="documents.html">All Documents</a>
+          <a href="register-document.html">Register a Document</a>
+        </div>
+      </div>
+      <div class="nav-item">
+        <a class="" href="dashboard.html">Dashboard <span class="caret">▾</span></a>
+        <div class="nav-dropdown">
+          <a href="dashboard.html">Readiness Dashboard</a>
+          <a href="sitemap.html">Full Sitemap</a>
+        </div>
+      </div>
+      <!-- Home is only ever reached after signing in on login.html, so this
+           will only ever render "Log Out" here, never a "Log In" prompt. -->
+      <div class="role-switcher">
+        <div id="authBox"></div>
+      </div>
+    </nav>
+  </header>
+  <section class="hero">
+    <span class="eyebrow">Center of Excellence</span>
+    <h1>Welcome to TREAT</h1>
+    <p class="tagline">Find standards, tools, monitoring practices, capability programs, innovation pilots and their
+      linked SharePoint documents — all in one place.</p>
+    <div class="hero-search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="7" />
+        <path d="m21 21-4.3-4.3" />
+      </svg>
+      <input id="searchInput" type="text" placeholder="Search deliverables, documents, owners, keywords…"
+        autocomplete="off">
+    </div>
+    <div class="filters">
+      <h3>Filter by pillar</h3>
+      <div class="filter-pills" id="filterPills">
+        <button class="active" onclick="filterPillar('All', this)">All</button>
+        <button onclick="filterPillar('01', this)">01 · Standards</button>
+        <button onclick="filterPillar('02', this)">02 · Tools</button>
+        <button onclick="filterPillar('03', this)">03 · Monitoring</button>
+        <button onclick="filterPillar('04', this)">04 · Capability</button>
+        <button onclick="filterPillar('05', this)">05 · Innovation</button>
+      </div>
+    </div>
+    <!-- <div class="tech-landscape">
+
+      <div class="tech-logos">
+        <div class="tech-card"><img src="assets/Sap.png" alt=" Platform"></div>
+        <div class="tech-card"><img src="assets/D365.png" alt="D365"></div>
+        <div class="tech-card"><img src="assets/Salesforce.png" alt="Salesforce"></div>
+       <div class="tech-card">
+  <img class="zoom-logo" src="assets/playwright.png" alt="Playwright">
+</div>
+
+<div class="tech-card">
+  <img class="zoom-logo" src="assets/tosca.png" alt="Tosca">
+</div>
+        <div class="tech-card"><img src="assets/uipath.png" alt="uipath"></div>
+      </div>
+
+    </div> -->
+    <div id="heroResults"></div>
+  </section>
+  <main class="page-content">
+    <div class="wrap">
+
+      <p class="prose" style="max-width:820px">TREAT is the Center of Excellence that turns every ERP/CRM testing
+        engagement's hard-won learning into a reusable, governed asset. Read the full story on the <a href="about.html"
+          style="color:var(--teal-dark)">About page</a>.</p>
+
+      <div class="section-title">Quick Links</div>
+      <div class="quick-links" id="quickLinks">
+        <div class="ql-empty">Loading…</div>
+      </div>
+
+      <!-- <div class="section-title" id="pillars">The five pillars</div>
+      <div class="grid cols-5">
+        <a class="card pillar-card" href="01-standards.html">
+          <div class="num">01</div>
+          <h3>Standards & Best Practices</h3>
+          <p>The rulebook every ERP/CRM testing project inherits on day one.</p>
+        </a>
+        <a class="card pillar-card" href="02-tools.html">
+          <div class="num">02</div>
+          <h3>Tools & Technology</h3>
+          <p>How the COE chooses, documents and wires up the tools testers actually use.</p>
+        </a>
+        <a class="card pillar-card" href="03-monitoring.html">
+          <div class="num">03</div>
+          <h3>Monitoring & Continuous Improvement</h3>
+          <p>The feedback loop that keeps the COE's practices honest and current.</p>
+        </a>
+        <a class="card pillar-card" href="04-capability.html">
+          <div class="num">04</div>
+          <h3>Capability Building & Enablement</h3>
+          <p>Growing the people, knowledge and domain depth behind every engagement.</p>
+        </a>
+        <a class="card pillar-card" href="05-innovation.html">
+          <div class="num">05</div>
+          <h3>Innovation</h3>
+          <p>Where the COE tests AI on itself before it reaches a project.</p>
+        </a>
+      </div>
+
+    </div> -->
+  </main>
+  <footer class="site-footer">
+
+    <div class="footer-text">
+      TREAT Center of Excellence — Internal Knowledge Repository &middot; Documents hosted in
+      <b>SharePoint / Teams.</b>
+    </div>
+    <div class="footer-tech-logos">
+
+      <div class="footer-tech-card">
+        <img src="assets/Sap.png" alt="SAP">
+      </div>
+
+      <div class="footer-tech-card">
+        <img src="assets/D365.png" alt="Microsoft Dynamics 365">
+      </div>
+
+      <div class="footer-tech-card">
+        <img src="assets/Salesforce.png" alt="Salesforce">
+      </div>
+
+      <div class="tech-card">
+        <img class="playwright" src="assets/playwright.png" alt="Playwright">
+      </div>
+
+      <div class="tech-card">
+        <img class="zoom-logo" src="assets/tosca.png" alt="Tosca">
+      </div>
+
+      <div class="footer-tech-card">
+        <img src="assets/uipath.png" alt="UiPath">
+      </div>
+
+    </div>
+
+  </footer>
+  <div id="about-overlay" onclick="toggleAbout()"></div>
+  <div id="about-modal">
+    <div id="about-header">About TREAT<span id="about-close" onclick="toggleAbout()">&times;</span></div>
+    <div id="about-body">
+      <p><strong>EAT</strong> is <strong>TX's Enterprise Application Testing</strong>, the Center of Excellence behind
+        every
+        ERP/CRM testing engagement. See the full <a href="about.html" style="color:var(--teal)">About page</a> for
+        details.</p>
+    </div>
+  </div>
+
+  <!-- ============================= -->
+  <!-- AI Knowledge Assistant -->
+  <!-- ============================= -->
+  <div id="chatbot-button" onclick="toggleChatbot()"><svg viewBox="0 0 24 24" fill="none" stroke="white"
+      stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="4" y="8" width="16" height="12" rx="3" />
+      <circle cx="9" cy="14" r="1.1" fill="white" stroke="none" />
+      <circle cx="15" cy="14" r="1.1" fill="white" stroke="none" />
+      <path d="M9 17.3h6" />
+      <path d="M12 8V5" />
+      <circle cx="12" cy="3.4" r="1.2" fill="white" stroke="none" />
+      <path d="M2 12h2M20 12h2" />
+    </svg></div>
+  <div id="chatbot-window">
+    <div id="chat-header">
+      <span>SCOUT</span>
+      <span class="close" onclick="toggleChatbot()">&times;</span>
+    </div>
+    <div id="chat-body">
+      <div class="bot-message">
+        <strong>👋 Welcome!</strong><br><br>
+        I can search both COE deliverables and linked documents.
+        Ask me things like:<br><br>
+        • Show me Deliverable 3.6<br>
+        • Search related to Automation Tools<br>
+        • Find documents using keywords<br>
+        • Find documents by tags<br>
+        • Locate the text inside documents
+      </div>
+    </div>
+    <div id="chat-footer">
+      <input id="chat-input" type="text" placeholder="Ask about the COE repository…"
+        onkeypress="if(event.key==='Enter'){sendMessage();}">
+      <button onclick="sendMessage()">Send</button>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3/lib/msal-browser.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3/build/pdf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mammoth@1/mammoth.browser.min.js"></script>
+  <script src="js/site.js?v=20260803115326"></script>
+  <script src="js/auth.js?v=20260803115326"></script>
+  <script src="js/graph.js?v=20260803115326"></script>
+</body>
+
+</html>

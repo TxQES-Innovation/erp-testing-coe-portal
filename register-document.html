@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Register a Document · TREAT COE</title>
+  <link rel="stylesheet" href="assets/style.css">
+
+</head>
+
+<body>
+  <header class="site-header">
+    <a class="logo" href="index.html">
+      <img src="assets/treat.png" alt="TREAT logo">
+      <span class="lt"><i>Tx’s Repository For Enterprise Applications Testing</i></span>
+    </a>
+    <button class="nav-toggle" aria-label="Toggle navigation menu">&#9776;</button>
+    <nav class="site-nav">
+      <a class="nav-flat" href="index.html">Home</a>
+      <div class="nav-item">
+        <a class="" href="about.html">About <span class="caret">▾</span></a>
+        <div class="nav-dropdown">
+          <a href="about.html">About TREAT</a>
+        </div>
+      </div>
+      <div class="nav-item">
+        <a class="" href="sitemap.html">Pillars <span class="caret">▾</span></a>
+        <div class="nav-dropdown">
+          <a href="01-standards.html">01 · Standards & Best Practices</a>
+          <a href="02-tools.html">02 · Tools & Technology</a>
+          <a href="03-monitoring.html">03 · Monitoring & Continuous Improvement</a>
+          <a href="04-capability.html">04 · Capability Building & Enablement</a>
+          <a href="05-innovation.html">05 · Innovation</a>
+        </div>
+      </div>
+      <div class="nav-item">
+        <a class="active" href="documents.html">Documents <span class="caret">▾</span></a>
+        <div class="nav-dropdown">
+          <a href="documents.html">All Documents</a>
+          <a href="register-document.html">Register a Document</a>
+        </div>
+      </div>
+      <div class="nav-item">
+        <a class="" href="dashboard.html">Dashboard <span class="caret">▾</span></a>
+        <div class="nav-dropdown">
+          <a href="dashboard.html">Readiness Dashboard</a>
+          <a href="sitemap.html">Full Sitemap</a>
+        </div>
+      </div>
+      <div class="role-switcher">
+        <div id="authBox"></div>
+      </div>
+    </nav>
+  </header>
+  <section class="hero hero-sm">
+    <span class="eyebrow">Contribute</span>
+    <h1>Register a Document</h1>
+    <p class="tagline">Fill this out, attach your file, and hit Send — it's emailed automatically from your signed-in
+      Microsoft account. No mail app opens, nothing to do afterward.</p>
+  </section>
+  <main class="page-content">
+    <div class="wrap">
+
+      <div class="callout" style="margin-top:0">
+        <h4>How this works</h4>
+        <p>Fill in the details below, click <b>Choose file</b> to attach it from your computer, then hit <b> Send</b> —
+          the email is sent immediately, straight from this page, as you (via your signed-in Microsoft
+          account), with the file genuinely attached. No mail app opens, and there's nothing further to do — the COE
+          team receives it and files it into the right SharePoint folder based on the pillar/labels you chose.
+          (Files over 3MB can't be attached automatically — you'll be told if that happens, so you can share it
+          separately.)</p>
+      </div>
+
+      <div class="grid" style="grid-template-columns:1fr;gap:24px;align-items:start">
+        <div class="card">
+          <form id="docRegisterForm">
+            <div class="reg-field">
+              <label>Your name <span class="reg-optional">(from your Microsoft sign-in)</span></label>
+              <input type="text" id="rfName" placeholder="Jordan Patel">
+            </div>
+            <div class="reg-field">
+              <label>Your email <span class="reg-optional">(from your Microsoft sign-in)</span></label>
+              <input type="email" id="rfEmail" placeholder="jordan.patel@company.com">
+            </div>
+            <div class="reg-field">
+              <label>Document name</label>
+              <input type="text" id="rfDocName" placeholder="e.g. Regression Test Checklist v2.docx">
+            </div>
+            <div class="reg-field">
+              <label>Description <span class="reg-optional">(optional)</span></label>
+              <textarea id="rfDescription" rows="3"
+                placeholder="What is this document and why does it belong in the repository?"></textarea>
+            </div>
+            <div class="reg-field-row">
+              <div class="reg-field">
+                <label>Pillar</label>
+                <select id="rfPillar">
+                  <option value="">No specific pillar</option>
+                  <option value="01">01 · Standards & Best Practices</option>
+                  <option value="02">02 · Tools & Technology</option>
+                  <option value="03">03 · Monitoring & Continuous Improvement</option>
+                  <option value="04">04 · Capability Building & Enablement</option>
+                  <option value="05">05 · Innovation</option>
+                </select>
+              </div>
+              <div class="reg-field">
+                <label>Related story <span class="reg-optional">(optional)</span></label>
+                <select id="rfStory">
+                  <option value="">No specific story</option>
+                </select>
+              </div>
+            </div>
+            <div class="reg-field">
+              <label>Labels / tags <span class="reg-optional">(comma separated — used to route it to the right
+                  folder)</span></label>
+              <input type="text" id="rfTags" placeholder="e.g. automation, regression, checklist">
+            </div>
+            <div class="reg-field">
+              <label>Attach a file</label>
+              <div class="reg-file-row">
+                <label class="signin-btn reg-attach-btn" for="rfFile"
+                  style="background:#fff;color:var(--ink);border:1px solid var(--border)">📎 Choose file</label>
+                <input type="file" id="rfFile" style="display:none">
+                <span id="rfFileName" class="reg-filename"></span>
+                <button type="button" id="rfSendBtn" class="signin-btn reg-send-btn"
+                  style="background:var(--teal);color:#fff">Send</button>
+              </div>
+              <p class="uf-note" style="margin-top:10px"></p>
+            </div>
+          </form>
+        </div>
+      </div>
+
+    </div>
+  </main>
+  <footer class="site-footer">TREAT Center of Excellence — Internal Knowledge Repository
+    &middot;
+    Documents hosted in <b>SharePoint / Teams.</b></footer>
+  <div id="about-overlay" onclick="toggleAbout()"></div>
+  <div id="about-modal">
+    <div id="about-header">About EAT<span id="about-close" onclick="toggleAbout()">&times;</span></div>
+    <div id="about-body">
+      <p><strong>EAT</strong> is <strong>Tx's Repository Of Enterprise Application Testing</strong>, the Center of
+        Excellence behind
+        every
+        ERP/CRM testing engagement. See the full <a href="about.html" style="color:var(--teal)">About page</a> for
+        details.</p>
+    </div>
+  </div>
+
+  <!-- ============================= -->
+  <!-- AI Knowledge Assistant -->
+  <!-- ============================= -->
+  <div id="chatbot-button" onclick="toggleChatbot()"><svg viewBox="0 0 24 24" fill="none" stroke="white"
+      stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="4" y="8" width="16" height="12" rx="3" />
+      <circle cx="9" cy="14" r="1.1" fill="white" stroke="none" />
+      <circle cx="15" cy="14" r="1.1" fill="white" stroke="none" />
+      <path d="M9 17.3h6" />
+      <path d="M12 8V5" />
+      <circle cx="12" cy="3.4" r="1.2" fill="white" stroke="none" />
+      <path d="M2 12h2M20 12h2" />
+    </svg></div>
+  <div id="chatbot-window">
+    <div id="chat-header">
+      <span>SCOUT</span>
+      <span class="close" onclick="toggleChatbot()">&times;</span>
+    </div>
+    <div id="chat-body">
+      <div class="bot-message">
+        <strong>👋 Welcome!</strong><br><br>
+        I can search both COE deliverables and linked documents.
+        Ask me things like:<br><br>
+        • Show me Deliverable 3.6<br>
+        • Search related to Automation Tools<br>
+        • Find documents using keywords<br>
+        • Find documents by tags<br>
+        • Locate the text inside documents
+      </div>
+    </div>
+    <div id="chat-footer">
+      <input id="chat-input" type="text" placeholder="Ask about the COE repository…"
+        onkeypress="if(event.key==='Enter'){sendMessage();}">
+      <button onclick="sendMessage()">Send</button>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3/lib/msal-browser.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3/build/pdf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mammoth@1/mammoth.browser.min.js"></script>
+  <script src="js/site.js?v=20260803115326"></script>
+  <script src="js/auth.js?v=20260803115326"></script>
+  <script src="js/graph.js?v=20260803115326"></script>
+</body>
+
+</html>

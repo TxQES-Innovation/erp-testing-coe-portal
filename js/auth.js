@@ -20,7 +20,7 @@
 // MSAL's popup flow just briefly loads this URL to capture the auth
 // response, then closes the popup automatically; it's independent of which
 // page in the app the person actually clicked "Log In" from.
-const REGISTERED_REDIRECT_URI = "https://malkiattestingxperts.github.io/eat-coe-site";
+const REGISTERED_REDIRECT_URI = "https://txqes-innovation.github.io/erp-testing-coe-portal/";
 
 const MSAL_CONFIG = {
   auth: {
@@ -409,7 +409,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     onSignedIn(account);
     initInactivityTracking();
     // Already signed in but landed on the login page anyway (e.g. via a
-    // bookmark) — no need to show it, go straight to Home.
+    // bookmark) — no need to show it, gso straight to Home.
     if (isLoginPage()) {
       window.location.href = "index.html";
     }

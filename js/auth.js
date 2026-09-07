@@ -1,5 +1,5 @@
 /* ==========================================================================
-   TREAT COE — Microsoft SSO sign-in (MSAL.js)
+   EAT COE — Microsoft SSO sign-in (MSAL.js)
    Sign-in ONLY. No Graph document/permission calls happen here — this just
    proves who the visitor is (their real Microsoft work identity) and feeds
    their real display name into the rest of the site (activity log, tags,
@@ -20,7 +20,7 @@
 // MSAL's popup flow just briefly loads this URL to capture the auth
 // response, then closes the popup automatically; it's independent of which
 // page in the app the person actually clicked "Log In" from.
-const REGISTERED_REDIRECT_URI = "https://txqes-innovation.github.io/erp-testing-coe-portal/";
+const REGISTERED_REDIRECT_URI = "https://malkiattestingxperts.github.io/eat-coe-site";
 
 const MSAL_CONFIG = {
   auth: {
@@ -154,7 +154,13 @@ async function signIn() {
     }
 
     if (typeof showToast === "function") {
-      showToast("Sign-in failed (" + errorCode + "): " + errorMessage + hint, "error", 0);
+      // User-facing message is deliberately generic — no raw error code or
+      // internal error string shown here, only the already-friendly,
+      // actionable hint (which never contains raw technical detail). The
+      // full technical error is still fully available via
+      // console.error(...) just above, for anyone who actually needs to
+      // debug it.
+      showToast("Sign-in failed." + (hint || " Please try again, or contact your admin if this keeps happening."), "error", 0);
     }
   } finally {
     signInInProgress = false;
@@ -207,8 +213,30 @@ async function signOut() {
 // Until both are filled in, everyone defaults to Viewer (the safer option),
 // so this can be deployed before the group IDs are known without
 // accidentally granting Moderator access to everyone.
-const MODERATOR_GROUP_ID = "6a773ce8-d3f3-4ab1-9129-608524cbb9e9"; // TREAT-COE-Site Portal Moderators
-const VIEWER_GROUP_ID = "9220b96b-9ed3-4fcc-b1cf-064752309e98"; // TREAT-COE-Site Portal Viewers
+//
+// SECURITY NOTE (re: vulnerability assessment Finding 2.6 — "Exposure of
+// Internal Configuration Information, Group Identifiers, and Tenant
+// Metadata"): the two Object IDs below, along with the Client ID and
+// Tenant ID elsewhere in this file, are INTENTIONALLY public. None of
+// them function as secrets:
+//   - Client ID / Tenant ID are required, public-by-design values for any
+//     browser-based Microsoft Entra ID sign-in flow to work at all (true
+//     of every application built on MSAL.js, not specific to this one).
+//   - A Group Object ID does not grant membership in that group, nor any
+//     permission derived from it. Entra ID enforces access based on a
+//     signed-in person's REAL group membership, entirely independent of
+//     whether the group's ID itself is publicly visible.
+// This application never treats these values as an authorization
+// boundary on their own — role assignment (see determineRoleFromGroups()
+// below) only ever reads group membership from a cryptographically
+// signed, server-verified ID token, never from these constants directly.
+// No client secret exists anywhere in this application, in source
+// control, or at runtime — this app is registered in Entra ID as a
+// Single-Page Application (a "public client"), a type Microsoft's
+// platform deliberately never issues a secret to, since one embedded in
+// browser-delivered code could never actually be kept confidential.
+const MODERATOR_GROUP_ID = "6a773ce8-d3f3-4ab1-9129-608524cbb9e9"; // EAT-COE-Site Portal Moderators
+const VIEWER_GROUP_ID = "9220b96b-9ed3-4fcc-b1cf-064752309e98"; // EAT-COE-Site Portal Viewers
 
 /**
  * Reads real group membership from the signed-in account's ID token. This
@@ -283,8 +311,18 @@ function onSignedIn(account) {
 function onSignedOut() {
   if (typeof setUserName === "function") setUserName("Guest");
   if (typeof setRole === "function") setRole("viewer");
-  if (REQUIRE_SIGNIN && !isLoginPage()) document.body.classList.add("signin-required");
+  if (REQUIRE_SIGNIN && !isLoginPage()) {
+    // Navigate away immediately rather than just visually hiding content
+    // in place. The previous approach (a CSS blur over the existing page)
+    // left the real content fully intact in the DOM underneath — visible
+    // via DevTools or by simply removing the blur style, not a genuine
+    // removal. A real navigation discards the entire page/DOM state,
+    // so nothing from the authenticated session remains reachable at all.
+    window.location.href = "login.html";
+    return;
+  }
   renderAuthUI();
+  revealPage();
 }
 
 function escapeHtmlAuth(str) {
@@ -307,13 +345,13 @@ function renderAuthUI() {
           <span class="role-badge role-badge-moderator">Moderator</span>
           <span class="signed-in-name">👤 ${escapeHtmlAuth(account.name || account.username)}</span>
         </div>
-        <button class="signout-btn" onclick="signOut()">Log Out</button>`
+        <button class="signout-btn" data-sign-out="1">Log Out</button>`
       : `
         <span class="signed-in-name">👤 ${escapeHtmlAuth(account.name || account.username)}</span>
-        <button class="signout-btn" onclick="signOut()">Log Out</button>`;
+        <button class="signout-btn" data-sign-out="1">Log Out</button>`;
   } else {
     box.innerHTML = `
-      <button class="signin-btn" onclick="signIn()">
+      <button class="signin-btn" data-sign-in="1">
         Log In
       </button>${SSO_ENABLED ? "" : '<span class="sso-note">(setup pending)</span>'}`;
   }
@@ -391,11 +429,24 @@ function initInactivityTracking() {
   setInterval(checkSessionTimeout, 60 * 1000); // check once a minute
 }
 
+/**
+ * Un-hides the page body — paired with an inline `<style>html{visibility:
+ * hidden}</style>` placed as early as possible in each protected page's
+ * <head>. The page stays invisible until this explicitly runs, which only
+ * happens once we've confirmed it's actually safe to show (signed in, or
+ * sign-in isn't required at all) — minimizing/eliminating the brief flash
+ * of real content that could otherwise render before the redirect fires.
+ */
+function revealPage() {
+  document.documentElement.style.visibility = "visible";
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
   if (isMsalPopup()) return;
 
   if (!SSO_ENABLED) {
     renderAuthUI();
+    revealPage();
     return;
   }
   try {
@@ -409,16 +460,38 @@ document.addEventListener("DOMContentLoaded", async () => {
     onSignedIn(account);
     initInactivityTracking();
     // Already signed in but landed on the login page anyway (e.g. via a
-    // bookmark) — no need to show it, gso straight to Home.
+    // bookmark) — no need to show it, go straight to Home.
     if (isLoginPage()) {
       window.location.href = "index.html";
+    } else {
+      revealPage();
     }
   } else {
+    // onSignedOut() now handles the redirect to login.html itself when
+    // REQUIRE_SIGNIN is on — no separate redirect needed here.
     onSignedOut();
-    // Not signed in and this isn't the login page itself — send them there
-    // instead of showing a blurred/gated version of the real page.
-    if (REQUIRE_SIGNIN && !isLoginPage()) {
-      window.location.href = "login.html";
-    }
+  }
+});
+
+/**
+ * Closes the browser back-button gap: when navigating away from a page,
+ * browsers can snapshot the entire page (DOM, JS state, everything) in
+ * memory and instantly restore it on Back/Forward -- without re-running
+ * any JavaScript, including the DOMContentLoaded auth check above. That
+ * means pressing Back after logout could show the old, fully-intact
+ * signed-in page straight from that snapshot, bypassing every check on
+ * this page entirely.
+ *
+ * The "pageshow" event fires whenever a page becomes visible, including
+ * this exact restoration -- and event.persisted is true specifically when
+ * it came from that cache rather than a fresh load. Forcing a reload in
+ * that case guarantees the real auth check runs again from scratch: if
+ * the person is still genuinely signed in, the reload is instant and
+ * unnoticeable; if they're not, they're correctly redirected to login
+ * instead of seeing the stale cached page.
+ */
+window.addEventListener("pageshow", (event) => {
+  if (event.persisted) {
+    window.location.reload();
   }
 });

@@ -1123,11 +1123,22 @@ function suggestedFolder(pillarCode, storyCode) {
  */
 const MAX_FULLTEXT_CHARS = 200000;
 
-if (typeof pdfjsLib !== "undefined") {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3/build/pdf.worker.min.js";
+/**
+ * PDF.js now loads as an ES module (js/pdfjs-loader.mjs) — module scripts
+ * are deferred by the browser, so `pdfjsLib` may not exist yet at the
+ * moment this file's top-level code runs. This waits correctly either
+ * way: resolves immediately if it's already loaded, or waits for the
+ * loader's readiness event if not — no reliance on script-tag ordering.
+ */
+function waitForPdfJs() {
+  if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+  return new Promise((resolve) => {
+    document.addEventListener("pdfjs-ready", () => resolve(window.pdfjsLib), { once: true });
+  });
 }
 
 async function extractPdfText(arrayBuffer) {
+  const pdfjsLib = await waitForPdfJs();
   const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
   let text = "";
   for (let i = 1; i <= pdf.numPages; i++) {
@@ -1280,8 +1291,7 @@ function initRegisterForm() {
     });
     if (tags.length) setDocTagsOverride(name, tags);
 
-    fileNameLabel.textContent = "📎 " + file.name + " (" + Math.round(file.size / 1024) + " KB)" +
-      (status === "ok" ? " ·" : "");
+    fileNameLabel.textContent = "📎 " + file.name + " (" + Math.round(file.size / 1024) + " KB)";
   });
 
   function buildEmailContent() {
@@ -1347,8 +1357,7 @@ function initRegisterForm() {
       } catch (e) {
         console.error("Sending the document submission email failed:", e);
         alert(
-          "Couldn't send automatically: " + (e && e.message ? e.message : e) +
-          "\n\nThis usually means Microsoft sign-in hasn't granted mail-sending permission yet — " +
+          "Couldn't send automatically. This usually means Microsoft sign-in hasn't granted mail-sending permission yet — " +
           "try signing out and back in, or check with your admin if this keeps happening."
         );
       } finally {
@@ -1700,7 +1709,7 @@ function renderTagSuggestionsHtml(query, onSelectFnName) {
   return `
     <div class="tag-suggest-hint">Browsing tags — click one to search by it</div>
     <div class="tag-suggest-list">
-      ${matches.map(t => `<button type="button" class="tag-suggest-pill" onclick='${onSelectFnName}(${JSON.stringify(t)})'>#${escapeHtml(t)}</button>`).join("")}
+      ${matches.map(t => `<button type="button" class="tag-suggest-pill" data-tag-suggest="1" data-select-fn="${escapeHtml(onSelectFnName)}" data-tag-value="${escapeHtml(t)}">#${escapeHtml(t)}</button>`).join("")}
     </div>`;
 }
 
@@ -1762,15 +1771,15 @@ function renderResultCard(item) {
     ? `<p class="rc-story-tags">Tags: ${escapeHtml(item.tags.join(", "))}</p>`
     : "";
   const link = isStory ? item.url : "#";
-  const onclick = isStory ? "" : `onclick="openDocument(${JSON.stringify(item).replace(/"/g, '&quot;')});return false;"`;
+  const docAttrs = isStory ? "" : `data-doc-action="open" data-doc-id="${escapeHtml(item.id)}"`;
   const statusChip = isStory ? `<span class="chip ${item.status.toLowerCase().replace(/\s+/g, '')}">${escapeHtml(item.status)}</span>` : "";
   const snippetHtml = item._snippet
-    ? `<p class="body-match">: “${escapeHtml(item._snippet)}”</p>`
+    ? `<p class="body-match">“${escapeHtml(item._snippet)}”</p>`
     : "";
   return `
     <div class="result-card">
       <div class="rc-top">
-        <a class="rc-title" href="${link}" ${onclick}>${item.code ? escapeHtml(item.code) + " · " : ""}${escapeHtml(title)}</a>
+        <a class="rc-title" href="${link}" ${docAttrs}>${item.code ? escapeHtml(item.code) + " · " : ""}${escapeHtml(title)}</a>
         <span style="display:flex;gap:6px;align-items:center">
           <span class="type-badge ${item.type}">${item.type}</span>${statusChip}
         </span>
@@ -1816,7 +1825,7 @@ function renderQuickLinks() {
   const col = (title, items, sub, emptyMessage) => `
     <div class="ql-card">
       <h4>${title}</h4>
-      ${items.length ? `<ul>${items.map(d => `<li><a href="#" onclick='openDocument(${JSON.stringify(d).replace(/'/g, "&apos;")});return false;'>${escapeHtml(d.name)}</a><span>${sub(d)}</span></li>`).join("")}</ul>` : `<div class="ql-empty">${emptyMessage || "Nothing here yet."}</div>`}
+      ${items.length ? `<ul>${items.map(d => `<li><a href="#" data-doc-action="open" data-doc-id="${escapeHtml(d.id)}">${escapeHtml(d.name)}</a><span>${sub(d)}</span></li>`).join("")}</ul>` : `<div class="ql-empty">${emptyMessage || "Nothing here yet."}</div>`}
     </div>`;
 
   root.innerHTML = [
@@ -1930,8 +1939,8 @@ function renderGroupedDocuments(docs, pillarFilter) {
     </details>`;
 
   let html = `<div class="doc-group-toolbar">
-      <button type="button" class="doc-group-toggle-all" onclick="setAllDocGroups(true)">Expand all</button>
-      <button type="button" class="doc-group-toggle-all" onclick="setAllDocGroups(false)">Collapse all</button>
+      <button type="button" class="doc-group-toggle-all" data-groups-toggle="expand">Expand all</button>
+      <button type="button" class="doc-group-toggle-all" data-groups-toggle="collapse">Collapse all</button>
     </div>`;
 
   stories.forEach(story => {
@@ -2025,7 +2034,9 @@ function storyLinkHtml(doc) {
   if (!doc.storyCode) return "";
   const story = STORIES.find(s => s.code === doc.storyCode);
   if (!story) return "";
-  return ` · <a class="story-link" href="${story.url}">📁 ${escapeHtml(story.code)} ${escapeHtml(story.title)}</a>`;
+  return isSafeUrl(story.url)
+    ? ` · <a class="story-link" href="${escapeHtml(story.url)}">📁 ${escapeHtml(story.code)} ${escapeHtml(story.title)}</a>`
+    : ` · <span class="story-link">📁 ${escapeHtml(story.code)} ${escapeHtml(story.title)}</span>`;
 }
 
 function docRowHtml(d) {
@@ -2033,26 +2044,26 @@ function docRowHtml(d) {
   const isPending = d.sourceType === "pending";
   let indexBadge = "";
   if (d.fullText) {
-    indexBadge = '<span class="type-badge story" title="Every line of this document is searchable"></span>';
+    indexBadge = '';
   } else if ((d.sourceType === "user" || isPending) && d.fullTextStatus === "unsupported") {
     indexBadge = '<span class="sso-note">(full-text search not available for this file type)</span>';
   }
   const pendingTag = isPending ? '<span class="type-badge document" title="Attached on the Register a Document page — not yet emailed">📋 pending submission</span>' : "";
   const actions = isPending
     ? `<span class="sso-note">Fill out and send the form above to submit this ↑</span>`
-    : `<button onclick='downloadDocument(${JSON.stringify(d).replace(/'/g, "&apos;")})'>⬇ Download</button>
-       <button onclick='openDocument(${JSON.stringify(d).replace(/'/g, "&apos;")})'>↗ View</button>
-       ${canManage ? `<button class="danger contributor-only" onclick="handleDeleteDoc('${d.id}')">Remove</button>` : ""}`;
+    : `<button data-doc-action="download" data-doc-id="${escapeHtml(d.id)}">⬇ Download</button>
+       <button data-doc-action="open" data-doc-id="${escapeHtml(d.id)}">↗ View</button>
+       ${canManage ? `<button class="danger contributor-only" data-delete-doc="1" data-doc-id="${escapeHtml(d.id)}">Remove</button>` : ""}`;
   return `
     <div class="doc-row" data-doc-id="${d.id}">
       <div class="dr-main">
         <div class="dr-name">📄 ${escapeHtml(d.name)} ${(d.tags || []).some(t => t.toLowerCase() === "featured") ? '<span class="type-badge document">featured</span>' : ""}${pendingTag} ${indexBadge}</div>
         <div class="dr-meta">${escapeHtml(d.pillar || "Unlinked")} · Uploaded by ${escapeHtml(d.uploadedBy)} on ${d.uploadDate} · Last modified by ${escapeHtml(d.lastModifiedBy)} on ${d.lastModifiedDate} · ${d.downloads} opens${storyLinkHtml(d)}</div>
         <div class="dr-tags" id="tags-${d.id}">${renderTagPills(d)}</div>
-        ${d._snippet ? `<p class="body-match" style="margin-top:8px">: “${escapeHtml(d._snippet)}”</p>` : ""}
+        ${d._snippet ? `<p class="body-match" style="margin-top:8px">“${escapeHtml(d._snippet)}”</p>` : ""}
         <div class="contributor-only tag-add-form">
           <input type="text" placeholder="add tag…" id="newtag-${d.id}">
-          <button type="button" onclick="handleAddTag('${d.id}')">Add tag</button>
+          <button type="button" data-add-tag="1" data-doc-id="${escapeHtml(d.id)}">Add tag</button>
         </div>
       </div>
       <div class="dr-actions">
@@ -2062,10 +2073,143 @@ function docRowHtml(d) {
 }
 
 function renderTagPills(d) {
-  return (d.tags || []).map(t => `<span class="tag-pill">${escapeHtml(t)}<span class="rm contributor-only" onclick="handleRemoveTag('${d.id}','${escapeHtml(t)}')">&times;</span></span>`).join("") || `<span class="ql-empty">No tags</span>`;
+  return (d.tags || []).map(t => `<span class="tag-pill">${escapeHtml(t)}<span class="rm contributor-only" data-tag-remove="1" data-doc-id="${escapeHtml(d.id)}" data-tag-value="${escapeHtml(t)}">&times;</span></span>`).join("") || `<span class="ql-empty">No tags</span>`;
 }
 
 function findDocById(id) { return getAllDocuments().find(d => d.id === id); }
+
+/**
+ * Only allows a URL to become a clickable link if it's a normal web
+ * address (http/https) or a same-site relative path — blocks
+ * javascript:, data:, vbscript:, and any other scheme that could execute
+ * code if clicked, regardless of where the URL value originally came
+ * from (SharePoint metadata, story data, etc.).
+ */
+function isSafeUrl(url) {
+  if (!url || typeof url !== "string") return false;
+  const trimmed = url.trim();
+  if (/^https?:\/\//i.test(trimmed)) return true;
+  if (/^[a-z0-9][a-z0-9._\-\/]*\.html/i.test(trimmed)) return true; // same-site relative pages, e.g. "01-standards.html#1.1"
+  return false;
+}
+
+/**
+ * Single, global click handler for document actions (open/download),
+ * using event delegation with an opaque data-doc-id — deliberately
+ * replaces the previous pattern of embedding full, JSON.stringify()'d
+ * SharePoint document objects directly into inline onclick="" attributes.
+ * That pattern mixed attacker-influenceable metadata (document names,
+ * live from SharePoint) with an executable JavaScript context — a real
+ * injection risk regardless of how carefully the serialization was
+ * escaped. This version never places anything but an ID (not
+ * attacker-shaped free text) into the DOM/markup; the real object is
+ * always resolved server-side-equivalent, via findDocById(), at the
+ * moment of the click, never trusted from markup.
+ */
+document.addEventListener("click", (e) => {
+  const removeTagEl = e.target.closest("[data-tag-remove]");
+  if (removeTagEl) {
+    e.preventDefault();
+    handleRemoveTag(removeTagEl.dataset.docId, removeTagEl.dataset.tagValue);
+    return;
+  }
+
+  const addTagEl = e.target.closest("[data-add-tag]");
+  if (addTagEl) {
+    e.preventDefault();
+    handleAddTag(addTagEl.dataset.docId);
+    return;
+  }
+
+  const deleteEl = e.target.closest("[data-delete-doc]");
+  if (deleteEl) {
+    e.preventDefault();
+    handleDeleteDoc(deleteEl.dataset.docId);
+    return;
+  }
+
+  const groupToggleEl = e.target.closest("[data-groups-toggle]");
+  if (groupToggleEl) {
+    e.preventDefault();
+    setAllDocGroups(groupToggleEl.dataset.groupsToggle === "expand");
+    return;
+  }
+
+  const pillarEl = e.target.closest("[data-filter-pillar]");
+  if (pillarEl) {
+    e.preventDefault();
+    filterPillar(pillarEl.dataset.filterPillar, pillarEl);
+    return;
+  }
+
+  if (e.target.closest("[data-send-message]")) {
+    e.preventDefault();
+    sendMessage();
+    return;
+  }
+
+  if (e.target.closest("[data-sign-in]")) {
+    e.preventDefault();
+    signIn();
+    return;
+  }
+
+  if (e.target.closest("[data-sign-out]")) {
+    e.preventDefault();
+    signOut();
+    return;
+  }
+
+  if (e.target.closest("[data-toggle-about]")) {
+    e.preventDefault();
+    toggleAbout();
+    return;
+  }
+
+  if (e.target.closest("[data-toggle-chatbot]")) {
+    e.preventDefault();
+    toggleChatbot();
+    return;
+  }
+
+  const tagSuggestEl = e.target.closest("[data-tag-suggest]");
+  if (tagSuggestEl) {
+    e.preventDefault();
+    // Deliberately only allow the two known, legitimate function names
+    // this can ever contain — not an arbitrary window[...] call on
+    // whatever string happens to be in the attribute.
+    const allowedFns = { selectTagFromSuggestion, selectTagForDocSearch };
+    const fn = allowedFns[tagSuggestEl.dataset.selectFn];
+    if (fn) fn(tagSuggestEl.dataset.tagValue);
+    return;
+  }
+
+
+  if (!el) return;
+  const doc = findDocById(el.dataset.docId);
+  if (!doc) return;
+  e.preventDefault();
+  const action = el.dataset.docAction;
+  if (action === "open") openDocument(doc);
+  else if (action === "download") downloadDocument(doc);
+});
+
+// Same delegation approach for the one remaining keyboard-triggered
+// handler (Enter key sends a chat message) -- was previously an inline
+// onkeypress="" attribute, blocked under the same CSP restriction as
+// onclick.
+document.addEventListener("keypress", (e) => {
+  if (e.key === "Enter" && e.target.closest("[data-enter-sends]")) {
+    sendMessage();
+  }
+});
+
+document.addEventListener("change", (e) => {
+  const statusEl = e.target.closest("[data-status-select]");
+  if (statusEl) {
+    handleStatusChange(statusEl.dataset.storyCode, statusEl.value);
+  }
+});
 
 async function handleAddTag(id) {
   const input = document.getElementById("newtag-" + id);
@@ -2212,13 +2356,13 @@ function renderStoryTable() {
   const statuses = ["Done", "In Progress", "To Do", "Backlog"];
   root.innerHTML = stories.map(s => `
     <tr>
-      <td><a href="${s.url}">${s.code}</a></td>
+      <td>${isSafeUrl(s.url) ? `<a href="${escapeHtml(s.url)}">${escapeHtml(s.code)}</a>` : escapeHtml(s.code)}</td>
       <td>${escapeHtml(s.title)}</td>
       <td>${escapeHtml(s.pillar)}</td>
       <td>${escapeHtml(s.owner)}</td>
       <td>
         <span class="viewer-only-status chip ${s.status.toLowerCase().replace(/\s+/g, '')}">${escapeHtml(s.status)}</span>
-        <select class="contributor-only" style="display:none" onchange="handleStatusChange('${s.code}', this.value)">
+        <select class="contributor-only" style="display:none" data-status-select="1" data-story-code="${escapeHtml(s.code)}">
           ${statuses.map(st => `<option value="${st}" ${st === s.status ? "selected" : ""}>${st}</option>`).join("")}
         </select>
       </td>
@@ -2277,9 +2421,12 @@ function answerFromKnowledgeBase(keyword) {
     const isStory = item.type === "story";
     const title = isStory ? `${item.code} ${item.title}` : item.name;
     const href = isStory ? item.url : (item.url || SHAREPOINT_FOLDER_URL);
-    html += `<li>${isStory ? "📁" : "📄"} <a href="${href}" target="${isStory ? "_self" : "_blank"}">${escapeHtml(title)}</a> <span style="color:#5B6B7A">(${item.type})</span>`;
+    const linkHtml = isSafeUrl(href)
+      ? `<a href="${escapeHtml(href)}" target="${isStory ? "_self" : "_blank"}" rel="noopener noreferrer">${escapeHtml(title)}</a>`
+      : escapeHtml(title); // unsafe URL scheme — show as plain text, never as a clickable link
+    html += `<li>${isStory ? "📁" : "📄"} ${linkHtml} <span style="color:#5B6B7A">(${item.type})</span>`;
     if (item._snippet) {
-      html += `<br><span style="color:#5B6B7A;font-size:11.5px"> “${escapeHtml(item._snippet)}”</span>`;
+      html += `<br><span style="color:#5B6B7A;font-size:11.5px">“${escapeHtml(item._snippet)}”</span>`;
     }
     html += `</li>`;
   });

@@ -3,8 +3,37 @@
 
 <head>
   <meta charset="utf-8">
+  <!-- Partial mitigation for "Missing Security Headers" — the directives
+       below ARE honored when delivered via <meta>, unlike X-Frame-Options,
+       X-Content-Type-Options, and CSP's frame-ancestors directive, which
+       browsers only honor from a real HTTP header and silently ignore
+       here. Those three genuinely require a hosting platform capable of
+       setting response headers; this covers what's actually achievable
+       from a static file alone. -->
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://graph.microsoft.com https://login.microsoftonline.com https://*.sharepoint.com;">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <!-- Partial mitigation for Clickjacking (Finding 2.1/2.5) — a classic
+       frame-busting check: if this page is ever loaded inside another
+       site's iframe, break out of it immediately. This defeats their
+       exact demonstrated PoC. It's a pre-CSP-era technique though, not a
+       complete substitute for the real fix — the CSP frame-ancestors /
+       X-Frame-Options header, which (like the headers noted above) can
+       only be delivered by a hosting platform capable of setting real
+       HTTP response headers, not by any static-file-only technique. -->
+  <script src="js/anti-clickjacking.js"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Tools &amp; Technology · TREAT COE</title>
+  <!-- Hidden until auth.js confirms it's safe to show (signed in, or
+       sign-in not required) — minimizes/eliminates the brief flash of
+       real content that could otherwise render before a redirect fires
+       for an unauthenticated visitor. Restored via revealPage() in
+       js/auth.js. -->
+  <style>
+    html {
+      visibility: hidden
+    }
+  </style>
+  <title>Tools &amp; Technology · EAT COE</title>
   <link rel="stylesheet" href="assets/style.css">
 
 </head>
@@ -12,10 +41,10 @@
 <body>
   <header class="site-header">
     <a class="logo" href="index.html">
-      <img src="assets/treat.png" alt="TREAT logo">
-      <span class="lt"><i>Tx’s Repository For Enterprise Applications Testing</i></span>
+      <img src="assets/treat.png" alt="EAT COE logo">
+      <!-- <span class="lt"><b>TREAT- </b><span>Tx’s Repository For Enterprise Applications Testing</span></span> -->
     </a>
-    <button class="nav-toggle" onclick="document.querySelector('.site-nav').classList.toggle('open')">&#9776;</button>
+    <button class="nav-toggle" aria-label="Toggle navigation menu">&#9776;</button>
     <nav class="site-nav">
       <a class="nav-flat" href="index.html">Home</a>
       <div class="nav-item">
@@ -64,11 +93,11 @@
         <span>You're browsing as a <b>Viewer</b> (read-only). <b>Log In</b> in the top-right with your Microsoft account
           to upload documents, edit tags, or update story status.</span>
       </div>
-      <!-- <div class="role-banner contributor-only">
+      <div class="role-banner contributor-only">
         <span>You're signed in as a <b>Contributor</b>. You can upload documents, edit tags, and update story status.
           This is granted simply by signing in for now — it isn't yet tied to your real SharePoint permissions.</span>
-      </div> -->
-      <div class="role-banner contributor-only">
+      </div>
+      <div class="prose">
         <p>Gives project teams an objective way to evaluate and select tools, a living reference of tool capabilities
           and best practices, role-based user guides, and standard patterns for plugging automation into CI/CD.</p>
       </div>
@@ -195,9 +224,9 @@
   <footer class="site-footer">TREAT Center of Excellence — Internal Knowledge Repository
     &middot;
     Documents hosted in <b>SharePoint / Teams.</b></footer>
-  <div id="about-overlay" onclick="toggleAbout()"></div>
+  <div id="about-overlay" data-toggle-about="1"></div>
   <div id="about-modal">
-    <div id="about-header">About TREAT<span id="about-close" onclick="toggleAbout()">&times;</span></div>
+    <div id="about-header">About TREAT<span id="about-close" data-toggle-about="1">&times;</span></div>
     <div id="about-body">
       <p><strong>TREAT</strong> is <strong>Tx’s Repository For Enterprise Applications Testing</strong>, the Center of
         Excellence behind every
@@ -209,7 +238,7 @@
   <!-- ============================= -->
   <!-- AI Knowledge Assistant -->
   <!-- ============================= -->
-  <div id="chatbot-button" onclick="toggleChatbot()"><svg viewBox="0 0 24 24" fill="none" stroke="white"
+  <div id="chatbot-button" data-toggle-chatbot="1"><svg viewBox="0 0 24 24" fill="none" stroke="white"
       stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
       <rect x="4" y="8" width="16" height="12" rx="3" />
       <circle cx="9" cy="14" r="1.1" fill="white" stroke="none" />
@@ -222,7 +251,7 @@
   <div id="chatbot-window">
     <div id="chat-header">
       <span>SCOUT</span>
-      <span class="close" onclick="toggleChatbot()">&times;</span>
+      <span class="close" data-toggle-chatbot="1">&times;</span>
     </div>
     <div id="chat-body">
       <div class="bot-message">
@@ -237,18 +266,21 @@
       </div>
     </div>
     <div id="chat-footer">
-      <input id="chat-input" type="text" placeholder="Ask about the COE repository…"
-        onkeypress="if(event.key==='Enter'){sendMessage();}">
-      <button onclick="sendMessage()">Send</button>
+      <input id="chat-input" type="text" placeholder="Ask about the COE repository…" data-enter-sends="1">
+      <button data-send-message="1">Send</button>
     </div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3/lib/msal-browser.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3/build/pdf.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/mammoth@1/mammoth.browser.min.js"></script>
-  <script src="js/site.js?v=20260803115326"></script>
-  <script src="js/auth.js?v=20260803115326"></script>
-  <script src="js/graph.js?v=20260803115326"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3.30.0/lib/msal-browser.min.js"
+    integrity="sha384-YnOjsoOxSYo65h1BXWnSq24bFbqW8HfzMWSEQxYEMRmjW9Vl1J3HZI3iZxqNYvIi"
+    crossorigin="anonymous"></script>
+  <script type="module" src="js/pdfjs-loader.mjs"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mammoth@1.12.1/mammoth.browser.min.js"
+    integrity="sha384-HDD+X9TzmVU2HzA3VYqphTtip2QgcmmSAuKTMkFv709AUMZ6LPn0ysDRZeQIL31w"
+    crossorigin="anonymous"></script>
+  <script src="js/site.js?v=20260906091658"></script>
+  <script src="js/auth.js?v=20260906091658"></script>
+  <script src="js/graph.js?v=20260906091658"></script>
 </body>
 
 </html>
